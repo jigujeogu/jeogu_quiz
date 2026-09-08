@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>StanbyME</title>
+    <link rel="preload" href="../fonts/PretendardVariable.woff2" as="font" type="font/woff2" crossorigin>
+    <style>
+        @font-face {
+            font-family: 'Pretendard';
+            src: url('../fonts/PretendardVariable.woff2') format('woff2');
+            font-style: normal;
+            font-weight: 100 900;
+            font-display: swap;
+        }
+
+        .blinking-cursor {
+            font-weight: 200;
+            color: inherit;
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000; /* Letterbox background */
+            overflow: hidden;
+            touch-action: none; /* Prevent default touch actions like scrolling */
+        }
+
+        .screen-container {
+            position: relative;
+            width: 1080px;
+            height: 1920px;
+            /* 기존 배경의 하늘색 그라데이션 복원 */
+            background: linear-gradient(to bottom, #63C8FF 0%, #C5EBFF 34%); 
+            overflow: hidden;
+            transform-origin: center center;
+            box-shadow: 0 0 0 2px #000; /* 외부 블랙 레터박스와 자연스럽게 이어지도록 처리 */
+            backface-visibility: hidden; /* 서브픽셀 렌더링 시 테두리 빈 공간 방지 */
+            -webkit-mask-image: -webkit-linear-gradient(white, white); /* Webkit 강제 마스킹으로 테두리 샘 방지 */
+            mask-image: linear-gradient(white, white);
+        }
+
+        .screen-container.quiz-active {
+            background: #35D047;
+        }
+
+        .background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2; /* 구름(1)보다 앞쪽에 배치되어 잔디/타이틀이 구름을 가림 */
+            transform: scale(1.03); /* 렌더링 경계의 미세한 틈을 가리기 위한 3% 확대 */
+        }
+
+        .background.full-background {
+            background-image: url('asset/background 1.png');
+            background-size: cover;
+            background-position: center;
+        }
+
+        .background.road-only {
+            background-image: url('asset/background-road.png');
+            background-size: 100% auto;
+            background-position: center bottom;
+            background-repeat: no-repeat;
+        }
+
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none; /* 버튼 외 영역 터치 무시 */
+        }
+
+        .jeogu {
+            position: absolute;
+            left: 50%;
+            transform: translate3d(-50%, 0, 0);
+            top: 50.5%;
+            width: 799px;
+            height: 348px;
+            z-index: 10;
+            transform-origin: bottom center; /* 바닥에 고정된 상태로 숨쉬듯 부풀게 */
+            pointer-events: none; /* 투명한 영역은 클릭이 통과되도록 함 */
+            backface-visibility: hidden;
+        }
+
+        .jeogu-inner {
+            width: 100%;
+            height: 100%;
+            transform-origin: bottom center;
+            animation: breathe 2.5s infinite ease-in-out;
+            will-change: transform;
+            backface-visibility: hidden;
+        }
+
+        .jeogu svg, .jeogu img {
+            pointer-events: auto; /* 실제 이미지(캐릭터) 영역만 클릭 가능하게 설정 */
+        }
+
+        .jeogu.typing-active {
+            animation: jumpTransform 0.7s forwards;
+        }
+
+        .jeogu.typing-inactive {
+            animation: jumpTransformReverse 0.6s forwards;
+        }
+
+        @keyframes jumpTransform {
+            0% { transform: translate3d(-50%, 0, 0); animation-timing-function: cubic-bezier(0.25, 1, 0.5, 1); }
+            45% { transform: translate3d(-50%, -320px, 0); animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); }
+            75% { transform: translate3d(-50%, -198px, 0); animation-timing-function: cubic-bezier(0.25, 1, 0.5, 1); }
+            88% { transform: translate3d(-50%, -220px, 0); animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); }
+            100% { transform: translate3d(-50%, -198px, 0); } /* 키보드 높이 800px 맞춤 */
+        }
+
+        @keyframes jumpTransformReverse {
+            0% { transform: translate3d(-50%, -198px, 0); animation-timing-function: cubic-bezier(0.25, 1, 0.5, 1); }
+            40% { transform: translate3d(-50%, -300px, 0); animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); }
+            80% { transform: translate3d(-50%, 0, 0); animation-timing-function: cubic-bezier(0.25, 1, 0.5, 1); }
+            90% { transform: translate3d(-50%, -30px, 0); animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); }
+            100% { transform: translate3d(-50%, 0, 0); }
+        }
+
+        @keyframes breathe {
+            0%, 100% {
+                transform: scale(1, 1);
+            }
+            50% {
+                transform: scale(1.02, 1.04); /* 좌우 2%, 상하 4% 커짐 */
+            }
+        }
+
+        .pupil {
+            transform-origin: center;
+            /* JS의 requestAnimationFrame으로 부드럽게 제어하므로 transition 제거 */
+            will-change: transform;
+        }
+
+        .road-wrapper {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 0;
+            width: 200px;
+            height: 793px; /* 943px - 150px (clip-path 대신 GPU 부하 없는 overflow 마스킹) */
+            overflow: hidden;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .road-container {
+            position: absolute;
+            left: 0;
+            top: -150px;
+            width: 100%;
+            height: 943px;
+            perspective: 250px; /* 3D 공간 깊이감 부여 */
+            perspective-origin: 50% 0%; /* 소실점을 맨 위쪽(저구 밑)으로 설정 */
+            overflow: hidden;
+            transition: opacity 0.3s ease;
+            contain: paint;
+        }
+
+        .road-container.hide {
+            opacity: 0;
+        }
+
+        .road-line-css {
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            width: 69px; /* 기존 에셋 이미지의 최대 두께(69px)와 동일하게 맞춤 */
+            height: 3000px;
+            transform-origin: bottom center;
+            transform: translateX(-50%) rotateX(60deg) translateZ(0);
+            overflow: hidden;
+            backface-visibility: hidden;
+        }
+
+        .road-line-css::before {
+            content: '';
+            position: absolute;
+            top: -240px;
+            left: 0;
+            width: 100%;
+            height: calc(100% + 240px);
+            background-image: linear-gradient(to bottom, #ffffff 50%, transparent 50%);
+            background-size: 100% 240px;
+            transform: translate3d(0, 0, 0);
+            animation: moveRoadGPU 0.8s infinite linear;
+            will-change: transform;
+            backface-visibility: hidden;
+        }
+
+        .road-line-css.fast::before {
+            animation-duration: 0.25s;
+        }
+
+        @keyframes moveRoadGPU {
+            0% {
+                transform: translate3d(0, 0, 0);
+            }
+            100% {
+                transform: translate3d(0, 240px, 0);
+            }
+        }
+
+        .sky-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 50.5%; /* 하늘 영역 */
+            z-index: 1; /* background(2)보다 뒤에 위치 */
+            overflow: visible; /* 잔디가 가려주므로 가리지 않아도 됨 */
+        }
+
+        .cloud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            opacity: 0;
+            transform-origin: center center;
+            animation-timing-function: ease-in; /* 다가올수록 빨라지는 원근감 */
+            will-change: transform, opacity;
+            backface-visibility: hidden;
+        }
+
+        .cloud1 {
+            width: 3000px;
+            height: 1500px;
+            background-image: url('asset/cloud1.svg');
+            animation: moveCloudLeftGPU 8s infinite ease-in;
+        }
+
+        .cloud1.fast {
+            animation-duration: 2s;
+        }
+
+        .cloud2 {
+            width: 2500px;
+            height: 1250px;
+            background-image: url('asset/cloud2.svg');
+            animation: moveCloudRightGPU 7s infinite ease-in;
+            animation-delay: -3.5s;
+        }
+
+        .cloud2.fast {
+            animation-duration: 1.75s;
+            animation-delay: -0.875s;
+        }
+
+        /* 공통: GPU translate3d를 사용하여 60fps 하드웨어 가속 */
+        @keyframes moveCloudLeftGPU {
+            0% { transform: translate3d(324px, 1120px, 0) translate(-50%, -50%) scale(0.15); opacity: 0; }
+            10% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { transform: translate3d(-324px, 339px, 0) translate(-50%, -50%) scale(1.2); opacity: 0; }
+        }
+
+        @keyframes moveCloudRightGPU {
+            0% { transform: translate3d(756px, 1120px, 0) translate(-50%, -50%) scale(0.12); opacity: 0; }
+            10% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { transform: translate3d(1404px, 436px, 0) translate(-50%, -50%) scale(1.4); opacity: 0; }
+        }
+
+        .bt-start {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 78.1%;
+            width: 545px;
+            height: 175px;
+            background-image: url('asset/bt-start.svg');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: transform 0.1s;
+            z-index: 20;
+        }
+
+        .bt-start:active {
+            transform: translateX(-50%) scale(0.95);
+        }
+
+        .bt-name {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 78.1%;
+            width: 724px;
+            height: 175px;
+            background-image: url('asset/bt-name.svg');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            display: none; /* 처음에는 숨김 */
+            pointer-events: auto;
+            border: none;
+            background-color: transparent;
+            font-family: 'Pretendard', sans-serif;
+            font-weight: 600; /* SemiBold */
+            font-size: 38pt;
+            text-align: center;
+            box-sizing: border-box;
+            padding-bottom: 18px; /* 버튼 아래쪽 그림자 영역만큼 패딩을 주어 텍스트를 위로 밀어올림 */
+            line-height: 157px; /* 175px - 18px */
+            margin: 0;
+            color: #0F1811;
+            outline: none;
+            z-index: 20;
+            transition: top 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), width 0.5s, height 0.5s, font-size 0.5s;
+        }
+
+        .bt-name.typing-active {
+            top: 25%;
+            width: 845px;
+            height: 233px;
+            background-image: url('asset/rect-name.svg');
+            font-size: 65pt;
+            line-height: 233px;
+            padding-bottom: 0;
+        }
+
+        .bt-name::placeholder {
+            color: #797979;
+            transition: color 0.2s;
+        }
+
+        .bt-name:focus::placeholder {
+            color: transparent; /* 클릭 시 문구 사라짐 */
+        }
+
+        .sign-bubble {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: -5px; /* 이미지 픽셀 매칭: 바닥선에 다리가 위치함 */
+            width: 748px;
+            height: 516px;
+            background-image: url('asset/sign-bubble.svg');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            display: none; /* 처음엔 숨김 */
+            z-index: 25; /* 입력창이나 다른 UI보다 앞에 표시 */
+            pointer-events: none;
+            animation: popup 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        .sign-bubble .user-name {
+            position: absolute;
+            top: 165px; /* 보드판 정중앙 */
+            left: 50%;
+            width: 85%; /* 텍스트 양옆 여백 보장 */
+            text-align: center;
+            transform: translate(-50%, -50%);
+            font-family: 'Pretendard', sans-serif;
+            font-weight: 600; /* SemiBold */
+            font-size: 38pt;
+            color: #0F1811;
+            word-break: keep-all; /* 단어가 다 끝나면 줄바꿈 */
+            line-height: 1.4;
+        }
+
+        .progress-bar {
+            position: absolute;
+            top: 260px; /* 좌우 여백보다 훨씬 넓은 상단 여백 (약 260px) 반영 */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 919px;
+            height: 36px;
+            background-image: url('asset/bar-2.svg');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            display: none; /* 처음에 숨김 */
+            z-index: 30;
+        }
+
+        @keyframes popup {
+            0% { transform: translateX(-50%) scale(0); opacity: 0; }
+            100% { transform: translateX(-50%) scale(1); opacity: 1; }
+        }
+
+        .warning-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('asset/rect-warning.svg');
+            background-size: cover;
+            background-position: center;
+            z-index: 20; /* 표지판(25) 뒤, 저구(10) 앞 */
+            pointer-events: none;
+            display: none;
+            animation: flashWarning 0.4s infinite alternate;
+            will-change: opacity;
+            transform: translateZ(0);
+        }
+
+        @keyframes flashWarning {
+            0% { opacity: 0; }
+            100% { opacity: 0.8; } /* 너무 눈아프지 않게 최대 투명도 조절 */
+        }
+
+        .siren {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 400px; /* 저구 머리 위 허공에 띄움 */
+            width: 250px;
+            height: 358px;
+            display: none;
+            z-index: 12; /* 저구보다 위 */
+            pointer-events: none;
+        }
+
+        .siren .siren-img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+        }
+
+        .siren .siren-1 {
+            animation: toggleSiren1 0.5s infinite steps(1);
+        }
+
+        .siren .siren-2 {
+            animation: toggleSiren2 0.5s infinite steps(1);
+        }
+
+        @keyframes toggleSiren1 {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        @keyframes toggleSiren2 {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+
+        .touch-guide {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 60%; /* 저구 머리 위, 위치 상향 */
+            width: 802px;
+            height: 99px;
+            background-image: url('asset/touch.svg');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            display: none;
+            z-index: 12; /* 저구보다 위 */
+            animation: blinkTouch 2s infinite;
+        }
+
+        @keyframes blinkTouch {
+            0%, 75% { opacity: 1; }  /* 2초 중 1.5초(75%) 동안 유지 */
+            85%, 95% { opacity: 0; } /* 나머지 0.5초 동안 깜빡임 */
+            100% { opacity: 1; }
+        }
+
+        /* 퀴즈 화면 전환 애니메이션 추가 스타일 */
+        .green-wipe-svg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 2300px;
+            height: 2300px;
+            z-index: 48; /* 저구 앞으로 오도록 z-index 수정 */
+            display: none;
+            pointer-events: none;
+        }
+
+        .green-wipe-svg.active circle {
+            animation: wipeFill 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        @keyframes wipeFill {
+            from { stroke-dashoffset: 3613; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        .big-jeogu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(1.3); /* 애니메이션 최종 위치와 맞춤 */
+            width: 1800px;
+            z-index: 45;
+            display: none;
+            backface-visibility: hidden; /* 테두리 1px 여백 방지 */
+        }
+
+        .big-jeogu.zoom-in-big {
+            animation: bigJeoguZoom 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            transform-origin: center center;
+        }
+
+        @keyframes bigJeoguZoom {
+            0% { transform: translate(-50%, -50%) scale(0.3); }
+            100% { transform: translate(-50%, -50%) scale(1.3); } /* 화면 중앙에서 커지도록 중심축 수정 */
+        }
+
+        .quiz-screen {
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            width: calc(100% + 4px);
+            height: calc(100% + 4px);
+            background-color: #35D047;
+            z-index: 50;
+            display: flex;
+            pointer-events: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center; /* 화면 중앙 정렬 */
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .quiz-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .quiz-eyes {
+            width: 320px;
+            height: 130px;
+            margin-bottom: 250px; /* 텍스트와의 간격 */
+        }
+
+        .quiz-text {
+            text-align: center;
+            font-family: 'Pretendard', sans-serif;
+            color: #0F1811;
+        }
+
+        .quiz-text h1 {
+            font-size: 120pt;
+            font-weight: 800; /* ExtraBold */
+            margin: 0;
+            letter-spacing: -3px;
+        }
+
+        .quiz-text p {
+            font-size: 70pt;
+            font-weight: 700; /* Bold */
+            margin: 30px 0 0 0;
+            line-height: 1.25;
+            letter-spacing: -2px;
+        }
+
+        /* 타이핑 시 나타나는 상단 UI */
+        .typing-top-ui {
+            position: absolute;
+            top: 260px; /* 원래 진행바(bar-2) 위치와 동일하게 수정 */
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        .typing-top-ui.show {
+            opacity: 1;
+        }
+
+        .typing-top-ui .bar-1 {
+            width: 908px;
+            height: 13px;
+            background-image: url('asset/bar-1.svg');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
+        .max-chars-label {
+            position: absolute;
+            top: 400px; /* 이름 입력창(top: 480px) 바로 위에 배치 */
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Pretendard', sans-serif;
+            font-size: 34pt;
+            color: #ffffff;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        .max-chars-label.show {
+            opacity: 1;
+        }
+
+        /* 커스텀 가상 키보드 UI (애플 스타일) */
+        .mock-keyboard {
+            position: absolute;
+            bottom: -800px;
+            left: 0;
+            width: 100%;
+            height: 800px;
+            background-color: #d1d5dc;
+            z-index: 100;
+            transition: bottom 0.4s cubic-bezier(0.2, 0.9, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            padding: 30px 15px 50px 15px;
+            box-sizing: border-box;
+            gap: 20px;
+            pointer-events: auto;
+            border-top-left-radius: 20px;
+            border-top-right-radius: 20px;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+        }
+
+        .mock-keyboard.show {
+            bottom: 0;
+        }
+
+        .mock-key-row {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .mock-key {
+            background-color: #ffffff;
+            border-radius: 12px;
+            flex: 1;
+            box-shadow: 0 4px 0 #a2a8b0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 45pt;
+            font-family: 'Pretendard', sans-serif;
+            font-weight: 500;
+            color: #000;
+            user-select: none;
+            cursor: pointer;
+            height: 110px;
+        }
+
+        .mock-key.special {
+            background-color: #acb3bd;
+            box-shadow: 0 4px 0 #899099;
+            font-size: 36pt;
+        }
+
+        .mock-key:active {
+            transform: translateY(4px);
+            box-shadow: 0 0px 0 #a2a8b0;
+        }
+
+        .mock-key.special:active {
+            box-shadow: 0 0px 0 #899099;
+        }
+
+        .mock-key svg {
+            width: 55px;
+            height: 55px;
+            fill: none;
+            stroke: #000;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .keyboard-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 40px;
+            margin-top: 15px;
+        }
+
+        .keyboard-footer svg {
+            width: 60px;
+            height: 60px;
+            fill: none;
+            stroke: #4b525b;
+            stroke-width: 2;
+        }
+    </style>
+    <script src="../vendor/hangul-0.2.6.min.js" type="text/javascript"></script>
+    <script src="sounds/siren_b64.js"></script>
+    <script src="../bgm.js"></script>
+    <script src="../back_button.js"></script>
+</head>
+<body>
+    <div class="screen-container">
+        <!-- 구름(z-index:1)을 배경(z-index:2)보다 먼저 배치하여 잔디/로고 뒤로 숨김 -->
+        <div class="sky-container">
+            <div class="cloud cloud1"></div>
+            <div class="cloud cloud2"></div>
+        </div>
+        <div class="background full-background"></div>
+        <div class="ui-layer">
+            <!-- 경고 깜빡임 오버레이 -->
+            <div class="warning-overlay" id="warningOverlay"></div>
+
+            <!-- 진행사항 표시 바 -->
+            <div class="progress-bar" id="progressBar"></div>
+
+            <div class="road-wrapper">
+                <div class="road-container">
+                    <div class="road-line-css"></div>
+                </div>
+            </div>
+            
+            <!-- 사이렌 알람 -->
+            <div class="siren" id="siren">
+                <img src="asset/alarm-1.svg" class="siren-img siren-1" alt="" decoding="async">
+                <img src="asset/alarm-2.svg" class="siren-img siren-2" alt="" decoding="async">
+            </div>
+
+            <!-- 터치 안내문구 -->
+            <div class="touch-guide" id="touchGuide"></div>
+
+            <div class="jeogu">
+                <div class="jeogu-inner">
+                    <img id="jeogu-svg-1" src="asset/jeogu-1.png" style="width: 100%; height: 100%;">
+                    <img id="jeogu-img-2" src="asset/jeogu-2.png" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+                    <img id="jeogu-img-3" src="asset/jeogu-3.png" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+                </div>
+            </div>
+            <!-- 큰 저구 에셋 (애니메이션용) -->
+            <img id="bigJeogu1" src="asset/big-jeogu-1.png" class="big-jeogu" decoding="async">
+            <img id="bigJeogu2" src="asset/big-jeogu-2.png" class="big-jeogu" decoding="async">
+
+            <div class="bt-start" id="btnStart"></div>
+            <input type="text" class="bt-name" id="btnName" placeholder="이름을 입력해주세요" autocomplete="off" spellcheck="false" readonly>
+            
+            <!-- 타이핑 상단 UI (bar-1) -->
+            <div class="typing-top-ui" id="typingTopUi">
+                <div class="bar-1"></div>
+            </div>
+            
+            <!-- 최대 5글자 라벨 -->
+            <div class="max-chars-label" id="maxCharsLabel">최대 5글자</div>
+
+            <!-- 이름 입력 후 나타나는 표지판 -->
+            <div class="sign-bubble" id="signBubble">
+                <div class="user-name" id="userNameDisplay"></div>
+            </div>
+
+            <!-- 시계방향 채우기 애니메이션 SVG -->
+            <svg class="green-wipe-svg" id="greenWipe" viewBox="0 0 2300 2300">
+                <circle cx="1150" cy="1150" r="575" fill="none" stroke="#35D047" stroke-width="1150"
+                        stroke-dasharray="3613" stroke-dashoffset="3613" transform="rotate(-90 1150 1150)" />
+            </svg>
+
+            <!-- 최종 퀴즈 화면 -->
+            <div class="quiz-screen" id="quizScreen">
+                <img src="asset/quiz 1.svg" style="width: 100%; height: 100%; object-fit: contain;">
+            </div>
+
+            <!-- 커스텀 가상 키보드 -->
+            <div class="mock-keyboard" id="mockKeyboard">
+                <div class="mock-key-row">
+                    <div class="mock-key letter-key" data-row="0" data-col="0">ㅂ</div>
+                    <div class="mock-key letter-key" data-row="0" data-col="1">ㅈ</div>
+                    <div class="mock-key letter-key" data-row="0" data-col="2">ㄷ</div>
+                    <div class="mock-key letter-key" data-row="0" data-col="3">ㄱ</div>
+                    <div class="mock-key letter-key" data-row="0" data-col="4">ㅅ</div>
+                    <div class="mock-key letter-key" data-row="0" data-col="5">ㅛ</div>
+                    <div class="mock-key letter-key" data-row="0" data-col="6">ㅕ</div>
+                    <div class="mock-key letter-key" data-row="0" data-col="7">ㅑ</div>
+                    <div class="mock-key letter-key" data-row="0" data-col="8">ㅐ</div>
+                    <div class="mock-key letter-key" data-row="0" data-col="9">ㅔ</div>
+                </div>
+                <div class="mock-key-row" style="padding: 0 53px;">
+                    <div class="mock-key letter-key" data-row="1" data-col="0">ㅁ</div>
+                    <div class="mock-key letter-key" data-row="1" data-col="1">ㄴ</div>
+                    <div class="mock-key letter-key" data-row="1" data-col="2">ㅇ</div>
+                    <div class="mock-key letter-key" data-row="1" data-col="3">ㄹ</div>
+                    <div class="mock-key letter-key" data-row="1" data-col="4">ㅎ</div>
+                    <div class="mock-key letter-key" data-row="1" data-col="5">ㅗ</div>
+                    <div class="mock-key letter-key" data-row="1" data-col="6">ㅓ</div>
+                    <div class="mock-key letter-key" data-row="1" data-col="7">ㅏ</div>
+                    <div class="mock-key letter-key" data-row="1" data-col="8">ㅣ</div>
+                </div>
+                <div class="mock-key-row">
+                    <div class="mock-key special" style="flex: 1.5;" data-key="shift">
+                        <svg viewBox="0 0 24 24"><path d="M12 4L12 20M12 4L6 10M12 4L18 10"/></svg>
+                    </div>
+                    <div class="mock-key letter-key" data-row="2" data-col="0">ㅋ</div>
+                    <div class="mock-key letter-key" data-row="2" data-col="1">ㅌ</div>
+                    <div class="mock-key letter-key" data-row="2" data-col="2">ㅊ</div>
+                    <div class="mock-key letter-key" data-row="2" data-col="3">ㅍ</div>
+                    <div class="mock-key letter-key" data-row="2" data-col="4">ㅠ</div>
+                    <div class="mock-key letter-key" data-row="2" data-col="5">ㅜ</div>
+                    <div class="mock-key letter-key" data-row="2" data-col="6">ㅡ</div>
+                    <div class="mock-key special" style="flex: 1.5;" data-key="backspace">
+                        <svg viewBox="0 0 24 24"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>
+                    </div>
+                </div>
+                <div class="mock-key-row">
+                    <div class="mock-key special" style="flex: 1.5; font-size: 32pt;" data-key="num" id="btnNum">123</div>
+                    <div class="mock-key" style="flex: 4;" data-key="space"></div>
+                    <div class="mock-key special" style="flex: 1.5;" data-key="enter">
+                        <svg viewBox="0 0 24 24"><path d="M9 10l-5 5 5 5"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
+                    </div>
+                </div>
+                <div class="keyboard-footer">
+                    <svg viewBox="0 0 24 24" data-key="lang" id="btnLang" style="cursor: pointer;"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 화면 크기에 맞게 1080x1920 캔버스 스케일링
+        function resizeCanvas() {
+            const container = document.querySelector('.screen-container');
+            const scale = Math.min(window.innerWidth / 1080, window.innerHeight / 1920);
+            container.style.transform = `scale(${scale}) translateZ(0)`;
+        }
+
+        function waitForBackground(src, timeoutMs = 1500) {
+            return new Promise((resolve) => {
+                const image = new Image();
+                let settled = false;
+
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timeoutId);
+                    resolve();
+                };
+
+                const timeoutId = setTimeout(finish, timeoutMs);
+                image.onerror = finish;
+                image.onload = () => {
+                    if (typeof image.decode === 'function') {
+                        image.decode().then(finish, finish);
+                    } else {
+                        finish();
+                    }
+                };
+                image.src = src;
+            });
+        }
+
+        function prepareImage(image, timeoutMs = 2000) {
+            if (!image) return Promise.resolve();
+
+            return new Promise((resolve) => {
+                let settled = false;
+
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timeoutId);
+                    image.removeEventListener('load', handleLoad);
+                    image.removeEventListener('error', finish);
+                    resolve();
+                };
+
+                const decode = () => {
+                    if (typeof image.decode === 'function') {
+                        image.decode().then(finish, finish);
+                    } else {
+                        finish();
+                    }
+                };
+
+                const handleLoad = () => decode();
+                const timeoutId = setTimeout(finish, timeoutMs);
+
+                if (image.complete) {
+                    if (image.naturalWidth > 0) decode();
+                    else finish();
+                    return;
+                }
+
+                image.addEventListener('load', handleLoad, { once: true });
+                image.addEventListener('error', finish, { once: true });
+            });
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const btnStart = document.getElementById('btnStart');
+        const btnName = document.getElementById('btnName');
+        const signBubble = document.getElementById('signBubble');
+        const userNameDisplay = document.getElementById('userNameDisplay');
+        const backgroundEl = document.querySelector('.background');
+        const progressBar = document.getElementById('progressBar');
+        const jeoguEl = document.querySelector('.jeogu');
+        const jeoguSvg1 = document.getElementById('jeogu-svg-1');
+        const jeoguImg2 = document.getElementById('jeogu-img-2');
+        const jeoguImg3 = document.getElementById('jeogu-img-3');
+        const warningOverlay = document.getElementById('warningOverlay');
+        const siren = document.getElementById('siren');
+        const greenWipe = document.getElementById('greenWipe');
+        const quizScreen = document.getElementById('quizScreen');
+        const bigJeogu1 = document.getElementById('bigJeogu1');
+        const bigJeogu2 = document.getElementById('bigJeogu2');
+        const quizScreenImage = quizScreen.querySelector('img');
+        const finalTransitionAssetsReady = Promise.all([
+            jeoguSvg1,
+            jeoguImg2,
+            jeoguImg3,
+            bigJeogu1,
+            bigJeogu2,
+            quizScreenImage
+        ].map(image => prepareImage(image)));
+        let isFinalTransitionStarting = false;
+        const roadContainer = document.querySelector('.road-container');
+        const roadLineCss = document.querySelector('.road-line-css');
+        const cloud1 = document.querySelector('.cloud1');
+        const cloud2 = document.querySelector('.cloud2');
+        const mockKeyboard = document.getElementById('mockKeyboard');
+        const typingTopUi = document.getElementById('typingTopUi');
+        const maxCharsLabel = document.getElementById('maxCharsLabel');
+
+        jeoguEl.addEventListener('animationend', event => {
+            if (event.target === jeoguEl) jeoguEl.style.willChange = 'auto';
+        });
+        roadContainer.addEventListener('transitionend', event => {
+            if (event.target === roadContainer && event.propertyName === 'opacity') {
+                roadContainer.style.willChange = 'auto';
+            }
+        });
+
+        const isMobileDevice = /Mobi|Android|WebOS|iPhone|iPad|iPod/i.test(navigator.userAgent) || navigator.maxTouchPoints > 0;
+
+        const showKeyboard = () => {
+            // 전체 타이틀 이미지를 도로 전용 이미지로 교체
+            backgroundEl.classList.remove('full-background');
+            backgroundEl.classList.add('road-only');
+
+            if (!jeoguEl.classList.contains('typing-active')) {
+                jeoguEl.style.willChange = 'transform';
+            }
+            if (!roadContainer.classList.contains('hide')) {
+                roadContainer.style.willChange = 'opacity';
+            }
+            mockKeyboard.classList.add('show');
+            jeoguEl.classList.remove('typing-inactive');
+            jeoguEl.classList.add('typing-active');
+            roadContainer.classList.add('hide');
+            btnName.classList.add('typing-active');
+            typingTopUi.classList.add('show');
+            maxCharsLabel.classList.add('show');
+        };
+
+        const hideKeyboard = () => {
+            if (!jeoguEl.classList.contains('typing-inactive')) {
+                jeoguEl.style.willChange = 'transform';
+            }
+            if (roadContainer.classList.contains('hide')) {
+                roadContainer.style.willChange = 'opacity';
+            }
+            mockKeyboard.classList.remove('show');
+            jeoguEl.classList.remove('typing-active');
+            jeoguEl.classList.add('typing-inactive');
+            roadContainer.classList.remove('hide');
+            btnName.classList.remove('typing-active');
+            typingTopUi.classList.remove('show');
+            maxCharsLabel.classList.remove('show');
+        };
+
+        // 클릭 시 키보드가 뜨도록 설정 (포커스는 기본 동작으로 처리됨)
+        btnName.addEventListener('focus', showKeyboard);
+        btnName.addEventListener('click', showKeyboard);
+        
+        // 화면의 다른 부분을 클릭하면 키보드 숨기기
+        const handleOutsideClick = (e) => {
+            if (btnName.style.display === 'block' && mockKeyboard.classList.contains('show') && !mockKeyboard.contains(e.target) && e.target !== btnName) {
+                hideKeyboard();
+                // 포커스 해제
+                btnName.blur();
+            }
+        };
+        window.addEventListener('mousedown', handleOutsideClick);
+        window.addEventListener('touchstart', handleOutsideClick);
+
+        // 엔터키 입력 시 이름 제출 (노트북 등 실제 키보드 대응)
+        btnName.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                hideKeyboard();
+                submitName();
+            }
+        });
+
+        // 가상 키보드 레이아웃 데이터
+        const layoutKR = [
+            ['ㅂ','ㅈ','ㄷ','ㄱ','ㅅ','ㅛ','ㅕ','ㅑ','ㅐ','ㅔ'],
+            ['ㅁ','ㄴ','ㅇ','ㄹ','ㅎ','ㅗ','ㅓ','ㅏ','ㅣ'],
+            ['ㅋ','ㅌ','ㅊ','ㅍ','ㅠ','ㅜ','ㅡ']
+        ];
+        const layoutKRShift = [
+            ['ㅃ','ㅉ','ㄸ','ㄲ','ㅆ','ㅛ','ㅕ','ㅑ','ㅒ','ㅖ'],
+            ['ㅁ','ㄴ','ㅇ','ㄹ','ㅎ','ㅗ','ㅓ','ㅏ','ㅣ'],
+            ['ㅋ','ㅌ','ㅊ','ㅍ','ㅠ','ㅜ','ㅡ']
+        ];
+        const layoutEN = [
+            ['q','w','e','r','t','y','u','i','o','p'],
+            ['a','s','d','f','g','h','j','k','l'],
+            ['z','x','c','v','b','n','m']
+        ];
+        const layoutENShift = [
+            ['Q','W','E','R','T','Y','U','I','O','P'],
+            ['A','S','D','F','G','H','J','K','L'],
+            ['Z','X','C','V','B','N','M']
+        ];
+        const layoutNum = [
+            ['1','2','3','4','5','6','7','8','9','0'],
+            ['-','/',':',';','(',')','$','&','@','"'],
+            ['.','\,','?','!','\'']
+        ];
+
+        let currentLang = 'KR'; // 'KR', 'EN', 'NUM'
+        let isShift = false;
+
+        const updateKeyboardDisplay = () => {
+            const keys = document.querySelectorAll('.letter-key');
+            let layout;
+            if (currentLang === 'KR') layout = isShift ? layoutKRShift : layoutKR;
+            else if (currentLang === 'EN') layout = isShift ? layoutENShift : layoutEN;
+            else layout = layoutNum;
+
+            keys.forEach(key => {
+                const r = parseInt(key.getAttribute('data-row'));
+                const c = parseInt(key.getAttribute('data-col'));
+                if (layout[r] && layout[r][c]) {
+                    key.innerText = layout[r][c];
+                    key.style.visibility = 'visible';
+                } else {
+                    key.style.visibility = 'hidden';
+                }
+            });
+            document.getElementById('btnNum').innerText = currentLang === 'NUM' ? (isShift ? '가나다' : 'ABC') : '123';
+        };
+
+        const handleLangClick = (e) => {
+            e.preventDefault();
+            if (btnName.style.display !== 'block') return;
+            if (currentLang === 'KR') currentLang = 'EN';
+            else if (currentLang === 'EN') currentLang = 'KR';
+            else currentLang = 'KR';
+            isShift = false;
+            updateKeyboardDisplay();
+        };
+
+        const btnLang = document.getElementById('btnLang');
+        btnLang.addEventListener('mousedown', handleLangClick);
+        btnLang.addEventListener('touchstart', handleLangClick);
+
+        // 가상 키보드 입력 로직 (Hangul.js 연동)
+        const mockKeys = document.querySelectorAll('.mock-key');
+        mockKeys.forEach(key => {
+            const handleKeyClick = (e) => {
+                e.preventDefault(); // 입력창 포커스 잃지 않게 방지
+                if (btnName.style.display !== 'block') return;
+                
+                const keyType = key.getAttribute('data-key');
+                const keyText = key.innerText.trim();
+
+                if (keyType === 'shift') {
+                    isShift = !isShift;
+                    updateKeyboardDisplay();
+                    return;
+                }
+                
+                if (keyType === 'num') {
+                    if (currentLang === 'NUM') {
+                        currentLang = isShift ? 'EN' : 'KR';
+                    } else {
+                        currentLang = 'NUM';
+                    }
+                    isShift = false;
+                    updateKeyboardDisplay();
+                    return;
+                }
+
+                if (!window.Hangul) return; // 라이브러리 로드 대기
+
+                let typedChars = window.Hangul.disassemble(btnName.value);
+
+                if (keyType === 'backspace') {
+                    typedChars.pop();
+                } else if (keyType === 'space') {
+                    typedChars.push(' ');
+                } else if (keyType === 'enter') {
+                    hideKeyboard();
+                    submitName();
+                    return;
+                } else if (key.classList.contains('letter-key')) {
+                    typedChars.push(keyText);
+                    // 한 번 입력 후 쉬프트 해제 (숫자기호 제외)
+                    if (isShift && currentLang !== 'NUM') {
+                        isShift = false;
+                        updateKeyboardDisplay();
+                    }
+                }
+
+                // Hangul.assemble로 조합된 문자열 생성
+                const assembled = window.Hangul.assemble(typedChars);
+                if (assembled.length <= 5) {
+                    btnName.value = assembled;
+                } else {
+                    // 5글자 초과 시 마지막 입력 취소
+                    const truncated = assembled.slice(0, 5);
+                    btnName.value = truncated;
+                }
+            };
+            key.addEventListener('mousedown', handleKeyClick);
+            key.addEventListener('touchstart', handleKeyClick);
+        });
+
+        const handleStartClick = (e) => {
+            e.preventDefault(); // 기본 터치 이벤트 방지
+            btnStart.style.display = 'none';
+            btnName.style.display = 'block';
+        };
+
+        btnStart.addEventListener('click', handleStartClick);
+        btnStart.addEventListener('touchstart', handleStartClick);
+
+        // 표지판 문구 배열
+        const phrases = [
+            "만나서 반가워요<br>{name}님!",
+            "저는 충동구매를 막기 위해<br>힘쓰고 있는 방지턱이에요!",
+            "왜냐고요?",
+            "이런 소비가 불필요한<br>폐기물을 늘리고",
+            "운송 과정에서 막대한<br>이산화탄소를 배출하기<br>때문이에요",
+            "이런! 속도가 너무 빨라요!<br>환경을 고려하지 않고 무심코<br>구매하는 건 과속소비예요",
+            "저와 함께 퀴즈를 맞추면<br>속도를 줄일 수 있어요!",
+            "무심코 구매한 것들이 환경에<br>어떤 영향을 끼치는지 함께<br>알아볼까요?"
+        ];
+        let currentPhraseIndex = 0;
+        let userName = "";
+
+        // 타이핑 효과 상태 변수
+        let typingTimeout;
+        let isTyping = false;
+        let currentFullHTML = "";
+        let typingStartTime = 0;
+
+        // 초성, 중성, 종성 배열
+        const CHO = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+        const JUNG = ["ㅏ","ㅐ","ㅑ","ㅒ","ㅓ","ㅔ","ㅕ","ㅖ","ㅗ","ㅘ","ㅙ","ㅚ","ㅛ","ㅜ","ㅝ","ㅞ","ㅟ","ㅠ","ㅡ","ㅢ","ㅣ"];
+        const JONG = ["","ㄱ","ㄲ","ㄳ","ㄴ","ㄵ","ㄶ","ㄷ","ㄹ","ㄺ","ㄻ","ㄼ","ㄽ","ㄾ","ㄿ","ㅀ","ㅁ","ㅂ","ㅄ","ㅅ","ㅆ","ㅇ","ㅈ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+
+        function getCharacterTypingSteps(char) {
+            const code = char.charCodeAt(0);
+            if (code < 0xAC00 || code > 0xD7A3) return [char];
+
+            const cho = Math.floor((code - 0xAC00) / (21 * 28));
+            const jung = Math.floor(((code - 0xAC00) % (21 * 28)) / 28);
+            const jong = (code - 0xAC00) % 28;
+            const steps = [
+                CHO[cho],
+                String.fromCharCode(0xAC00 + (cho * 21 * 28) + (jung * 28))
+            ];
+            if (jong > 0) steps.push(char);
+            return steps;
+        }
+
+        function buildTypingTokens(root) {
+            const tokens = [];
+
+            const collect = (node) => {
+                Array.from(node.childNodes).forEach((child) => {
+                    if (child.nodeType === Node.TEXT_NODE) {
+                        const text = child.nodeValue || "";
+                        child.nodeValue = "";
+                        if (text) tokens.push({ type: 'text', node: child, text });
+                        return;
+                    }
+
+                    if (child.nodeType !== Node.ELEMENT_NODE) return;
+                    if (child.tagName === 'BR') {
+                        child.style.display = 'none';
+                        tokens.push({ type: 'break', node: child });
+                        return;
+                    }
+
+                    tokens.push({ type: 'markup' });
+                    collect(child);
+                    tokens.push({ type: 'markup' });
+                });
+            };
+
+            collect(root);
+            return tokens;
+        }
+
+        // HTML 구조는 한 번만 만들고 현재 텍스트 노드만 갱신하는 타이핑 효과
+        function playTypingEffect(element, htmlString, speed = 50) {
+            clearTimeout(typingTimeout);
+            element.innerHTML = "";
+            currentFullHTML = htmlString;
+            isTyping = true;
+            typingStartTime = Date.now();
+
+            const template = document.createElement('template');
+            template.innerHTML = htmlString;
+            const tokens = buildTypingTokens(template.content);
+            element.appendChild(template.content);
+
+            const cursor = document.createElement('span');
+            cursor.className = 'blinking-cursor';
+            cursor.textContent = '|';
+            element.appendChild(cursor);
+
+            let tokenIndex = 0;
+            let charIndex = 0;
+            let charStepIndex = 0;
+            let completedText = "";
+
+            function type() {
+                if (tokenIndex >= tokens.length) {
+                    isTyping = false;
+                    return;
+                }
+
+                const token = tokens[tokenIndex];
+                if (token.type === 'markup') {
+                    tokenIndex++;
+                    typingTimeout = setTimeout(type, speed);
+                    return;
+                }
+
+                if (token.type === 'break') {
+                    token.node.style.display = '';
+                    tokenIndex++;
+                    typingTimeout = setTimeout(type, speed);
+                    return;
+                }
+
+                if (charIndex >= token.text.length) {
+                    token.node.nodeValue = token.text;
+                    tokenIndex++;
+                    charIndex = 0;
+                    charStepIndex = 0;
+                    completedText = "";
+                    type();
+                    return;
+                }
+
+                const char = token.text[charIndex];
+                const steps = getCharacterTypingSteps(char);
+                token.node.nodeValue = completedText + steps[charStepIndex];
+                charStepIndex++;
+
+                if (charStepIndex >= steps.length) {
+                    completedText += char;
+                    charIndex++;
+                    charStepIndex = 0;
+                }
+
+                typingTimeout = setTimeout(type, speed);
+            }
+
+            type();
+        }
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let sirenBuffer = null;
+        let sirenSource = null;
+        let sirenReadyPromise = null;
+        let sirenPlayRequestId = 0;
+        
+        // 사이렌 볼륨 조절을 위한 GainNode 생성
+        const sirenGain = audioCtx.createGain();
+        sirenGain.gain.value = 0.2; // 스탠바이미 등 외부 스피커에서 잘 들리도록 기존 0.05에서 0.4로 상향
+        sirenGain.connect(audioCtx.destination);
+
+        // Base64 오디오 문자열을 ArrayBuffer로 변환
+        function base64ToArrayBuffer(base64) {
+            const binaryString = window.atob(base64.split(',')[1]);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        let trimStart = 0;
+        let trimEnd = 0;
+
+        // 첫 화면을 그린 뒤 한 번만 디코딩하고 같은 Promise를 재사용
+        function ensureSirenReady() {
+            if (sirenBuffer) return Promise.resolve(sirenBuffer);
+            if (sirenReadyPromise) return sirenReadyPromise;
+            if (typeof SIREN_B64 === 'undefined') return Promise.resolve(null);
+
+            sirenReadyPromise = audioCtx.decodeAudioData(base64ToArrayBuffer(SIREN_B64))
+              .then(buffer => {
+                sirenBuffer = buffer;
+
+                // 오디오 파형을 분석하여 앞뒤 무음 구간을 자동으로 찾아냅니다 (MP3 고질적 공백 제거용)
+                const channelData = buffer.getChannelData(0);
+                const threshold = 0.02; // 무음 판정 기준치 (진폭)
+
+                let startSample = 0;
+                let endSample = channelData.length - 1;
+
+                for (let i = 0; i < channelData.length; i++) {
+                    if (Math.abs(channelData[i]) > threshold) { startSample = i; break; }
+                }
+                for (let i = channelData.length - 1; i >= 0; i--) {
+                    if (Math.abs(channelData[i]) > threshold) { endSample = i; break; }
+                }
+
+                trimStart = startSample / buffer.sampleRate;
+                trimEnd = endSample / buffer.sampleRate;
+                return buffer;
+              })
+              .catch(error => {
+                  console.error("사이렌 오디오 디코딩 에러:", error);
+                  return null;
+              });
+
+            return sirenReadyPromise;
+        }
+
+        const runAudioWhenIdle = window.requestIdleCallback
+            ? callback => window.requestIdleCallback(callback, { timeout: 1000 })
+            : callback => window.setTimeout(callback, 100);
+
+        requestAnimationFrame(() => {
+            runAudioWhenIdle(() => ensureSirenReady());
+        });
+        window.addEventListener('pointerdown', ensureSirenReady, { once: true, passive: true });
+        window.addEventListener('touchstart', ensureSirenReady, { once: true, passive: true });
+        window.addEventListener('keydown', ensureSirenReady, { once: true });
+
+        async function playSiren() {
+            if (sirenSource) return;
+            const playRequestId = ++sirenPlayRequestId;
+            const buffer = await ensureSirenReady();
+            if (!buffer || playRequestId !== sirenPlayRequestId || sirenSource) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            sirenSource = audioCtx.createBufferSource();
+            sirenSource.buffer = buffer;
+            sirenSource.loop = true;
+
+            // 자동으로 분석된 실제 소리 구간만 정확히 반복하도록 설정
+            sirenSource.loopStart = trimStart;
+            sirenSource.loopEnd = trimEnd;
+
+            sirenSource.connect(sirenGain); // destination 대신 gainNode 연결
+            sirenSource.start(0, trimStart); // 시작도 소리가 나는 부분부터 즉시 시작
+        }
+
+        function stopSiren() {
+            sirenPlayRequestId++;
+            if (sirenSource) {
+                const source = sirenSource;
+                sirenSource = null;
+                try {
+                    source.stop();
+                } finally {
+                    source.disconnect();
+                }
+            }
+        }
+
+        window.addEventListener('pagehide', stopSiren);
+
+        const submitName = () => {
+            if (btnName.value.trim() === '') return;
+            userName = btnName.value.trim();
+            
+            // 첫 번째 문구 타이핑 효과로 시작
+            let newText = phrases[0].replace('{name}', userName);
+            playTypingEffect(userNameDisplay, newText);
+            
+            hideKeyboard();
+            
+            // 입력창 숨기고 표지판 및 진행바 표시
+            btnName.style.display = 'none';
+            signBubble.style.display = 'block';
+            progressBar.style.display = 'block';
+
+            // 저구가 완전히 착지한 후(0.6초 뒤) 터치 가이드 표시
+            setTimeout(() => {
+                document.getElementById('touchGuide').style.display = 'block';
+            }, 600);
+        };
+
+
+        let lastInteractionTime = 0;
+        let lastTouchTime = 0;
+
+        // 화면 클릭(터치) 시 상태에 따라 화면 전환 및 문구 넘어가기
+        const handleScreenClick = (e) => {
+            const now = Date.now();
+            if (now - lastInteractionTime < 400) return; // 터치와 클릭 중복 이벤트 방지
+            lastInteractionTime = now;
+
+            // 1. 시작 화면 (버튼이 표시된 상태)
+            if (btnStart.style.display !== 'none') {
+                return; // 화면 클릭으로는 넘어가지 않고 btnStart를 직접 클릭해야 함
+            }
+
+            // 2. 이름 입력 화면 (입력창이 표시된 상태)
+            if (btnName.style.display === 'block') {
+                if (e.target === btnName || mockKeyboard.contains(e.target)) return; // 입력창 자체 터치나 키보드 터치는 무시
+                submitName();
+                return;
+            }
+
+            // 3. 표지판이 화면에 표시된 상태일 때만 대화 진행
+            if (signBubble.style.display === 'block') {
+                if (isTyping) {
+                    // 타이핑이 시작된 직후(600ms 이내)에는 합성 클릭이나 이전 터치로 인한 즉시 스킵 방지
+                    if (now - typingStartTime < 600) {
+                        return;
+                    }
+                    // 사용자가 타이핑 도중 클릭/터치 시 남은 글자 모두 즉시 표시
+                    clearTimeout(typingTimeout);
+                    userNameDisplay.innerHTML = currentFullHTML;
+                    isTyping = false;
+                } else {
+                    if (currentPhraseIndex < phrases.length - 1) {
+                        currentPhraseIndex++;
+                        let newText = phrases[currentPhraseIndex].replace('{name}', userName);
+                        playTypingEffect(userNameDisplay, newText);
+
+                        // 터치 안내문구는 첫 페이지를 벗어나면 숨김
+                        if (currentPhraseIndex > 0) {
+                            document.getElementById('touchGuide').style.display = 'none';
+                        }
+
+                        // 표지판 순서에 따른 저구 표정 변경
+                        if (currentPhraseIndex === 3) {
+                            jeoguImg2.style.display = 'block';
+                            jeoguSvg1.style.display = 'none';
+                            jeoguImg3.style.display = 'none';
+                        } else if (currentPhraseIndex === 4) {
+                            jeoguImg3.style.display = 'block';
+                            jeoguSvg1.style.display = 'none';
+                            jeoguImg2.style.display = 'none';
+                        } else {
+                            jeoguSvg1.style.display = 'block';
+                            jeoguImg2.style.display = 'none';
+                            jeoguImg3.style.display = 'none';
+                        }
+
+                        // 6번째~8번째 화면(인덱스 5, 6, 7)에서 경고 깜빡임 및 사이렌 모션 지속
+                        if (currentPhraseIndex >= 5 && currentPhraseIndex <= 7) {
+                            warningOverlay.style.display = 'block';
+                            siren.style.display = 'block';
+                            playSiren();
+                        } else {
+                            warningOverlay.style.display = 'none';
+                            siren.style.display = 'none';
+                            stopSiren();
+                        }
+
+                        // 도로와 구름은 4번째 화면(인덱스 3)부터 가속
+                        if (currentPhraseIndex >= 3 && currentPhraseIndex <= 7) {
+                            roadLineCss.classList.add('fast');
+                            cloud1.classList.add('fast');
+                            cloud2.classList.add('fast');
+                        } else {
+                            roadLineCss.classList.remove('fast');
+                            cloud1.classList.remove('fast');
+                            cloud2.classList.remove('fast');
+                        }
+                    } else if (currentPhraseIndex === phrases.length - 1) {
+                        if (isFinalTransitionStarting) return;
+                        isFinalTransitionStarting = true;
+                        // 마지막 대화 후 클릭 시 전환 애니메이션 실행
+                        currentPhraseIndex++; // 중복 실행 방지
+                        finalTransitionAssetsReady.then(() => {
+                        
+                        // 기존 UI 숨기기
+                        signBubble.style.display = 'none';
+                        progressBar.style.display = 'none';
+                        warningOverlay.style.display = 'none';
+                        siren.style.display = 'none';
+                        document.getElementById('touchGuide').style.display = 'none';
+                        stopSiren();
+
+                        // 배경(구름, 도로) 애니메이션 정지
+                        roadLineCss.style.animation = 'none';
+                        cloud1.style.animation = 'none';
+                        cloud2.style.animation = 'none';
+
+                        // 1. 큰 저구 나타나며 줌인 애니메이션 시작
+                        jeoguEl.style.display = 'none'; // 작은 저구 숨기기
+                        bigJeogu1.style.display = 'block';
+                        bigJeogu2.style.display = 'block';
+                        bigJeogu2.style.opacity = '0'; // 애니메이션은 같이 진행되도록 초기에 투명하게 설정
+                        requestAnimationFrame(() => {
+                            bigJeogu1.classList.add('zoom-in-big');
+                            bigJeogu2.classList.add('zoom-in-big');
+                        });
+
+                        // 2. 줌인이 끝날 무렵(0.6초) 윙크 표정(big-jeogu-2)으로 변경
+                        setTimeout(() => {
+                            bigJeogu2.style.opacity = '1';
+                            bigJeogu1.style.display = 'none';
+                        }, 600);
+
+                        // 3. 줌인이 일정 수준 진행된 후(0.8초 뒤) 시계방향 채우기 시작
+                        setTimeout(() => {
+                            greenWipe.style.display = 'block';
+                            greenWipe.classList.add('active');
+                        }, 800);
+
+                        // 4. 초록색 채우기 완료 후 최종 퀴즈 문구 화면 표시 (2.3초)
+                        setTimeout(() => {
+                            quizScreen.classList.add('active');
+                            const container = document.querySelector('.screen-container');
+                            if (container) container.classList.add('quiz-active');
+                            setTimeout(() => {
+                                window.parent.postMessage({ type: 'navigate', url: encodeURI('./퀴즈1 전반부/index.html') }, '*');
+                            }, 1500);
+                        }, 2300);
+                        });
+                    }
+                }
+            }
+        };
+
+        window.addEventListener('touchstart', (e) => {
+            lastTouchTime = Date.now();
+            handleScreenClick(e);
+        }, { passive: true });
+
+        window.addEventListener('click', (e) => {
+            // 터치 직후 브라우저에서 발생하는 가상(synthetic) 클릭 이벤트 무시
+            if (Date.now() - lastTouchTime < 800) {
+                return;
+            }
+            handleScreenClick(e);
+        });
+
+        // 저구 눈동자가 커서를 따라다니게 하는 로직 (스마트 슬립 최적화: 유휴 시 CPU 0%)
+        const pupils = document.querySelectorAll('.pupil');
+        
+        let jeoguCenterX = window.innerWidth / 2;
+        let jeoguCenterY = window.innerHeight / 2;
+        let targetMoveX = 0;
+        let targetMoveY = 0;
+        let currentMoveX = 0;
+        let currentMoveY = 0;
+        let isEyeAnimating = false;
+
+        function updateJeoguCenter() {
+            if (!jeoguEl) return;
+            const rect = jeoguEl.getBoundingClientRect();
+            jeoguCenterX = rect.left + rect.width / 2;
+            jeoguCenterY = rect.top + rect.height * 0.3; // 눈이 위쪽에 있으므로 30% 지점
+        }
+
+        // 초기 좌표 설정 및 화면 크기 변경 시 재계산 (매 프레임 계산 방지)
+        setTimeout(updateJeoguCenter, 100);
+        window.addEventListener('resize', updateJeoguCenter, { passive: true });
+
+        function startEyeAnimation() {
+            if (!isEyeAnimating && pupils.length > 0) {
+                isEyeAnimating = true;
+                requestAnimationFrame(animateEyes);
+            }
+        }
+
+        function onPointerMove(e) {
+            const clientX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
+            const clientY = (e.touches && e.touches.length > 0) ? e.touches[0].clientY : e.clientY;
+            if (clientX === undefined || clientY === undefined) return;
+
+            const dx = clientX - jeoguCenterX;
+            const dy = clientY - jeoguCenterY;
+            const angle = Math.atan2(dy, dx);
+            
+            const maxDistance = 25; 
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const moveDist = Math.min(maxDistance, dist / 8);
+
+            targetMoveX = Math.cos(angle) * moveDist;
+            targetMoveY = Math.sin(angle) * moveDist;
+
+            startEyeAnimation();
+        }
+
+        window.addEventListener('mousemove', onPointerMove, { passive: true });
+        window.addEventListener('touchmove', onPointerMove, { passive: true });
+
+        // 목표 위치에 도달하면 자동으로 멈추는 부드러운 눈동자 Lerp
+        function animateEyes() {
+            if (pupils.length === 0) {
+                isEyeAnimating = false;
+                return;
+            }
+
+            const diffX = targetMoveX - currentMoveX;
+            const diffY = targetMoveY - currentMoveY;
+
+            if (Math.abs(diffX) < 0.05 && Math.abs(diffY) < 0.05) {
+                currentMoveX = targetMoveX;
+                currentMoveY = targetMoveY;
+                pupils.forEach(pupil => {
+                    pupil.style.transform = `translate3d(${currentMoveX}px, ${currentMoveY}px, 0)`;
+                });
+                isEyeAnimating = false; // 수렴 시 rAF 중단 -> CPU 0%
+                return;
+            }
+
+            currentMoveX += diffX * 0.15;
+            currentMoveY += diffY * 0.15;
+
+            pupils.forEach(pupil => {
+                pupil.style.transform = `translate3d(${currentMoveX}px, ${currentMoveY}px, 0)`;
+            });
+
+            requestAnimationFrame(animateEyes);
+        }
+
+    </script>
+</body>
+</html>
