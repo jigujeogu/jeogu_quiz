@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>퀴즈 1 - 게이미피케이션</title>
+  <script src="../bgm.js"></script>
+  <script src="../back_button.js"></script>
+  <link rel="preload" href="../fonts/PretendardVariable.woff2" as="font" type="font/woff2" crossorigin />
+  <style>
+    @font-face {
+      font-family: 'Pretendard';
+      src: url("../fonts/PretendardVariable.woff2") format("woff2");
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 스탠바이미: 16:9 세로형 = 9:16 비율 */
+    #scene-wrapper {
+      position: relative;
+      width: 56.25vh;
+      height: 100vh;
+      max-width: 100vw;
+      aspect-ratio: 9 / 16;
+      height: 100dvh;
+      max-width: 100dvw;
+      overflow: hidden;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    /* 피그마 캔버스 1080x1920 기준으로 내부 배치 */
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1920px;
+      transform-origin: top left;
+    }
+
+    #bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1920px;
+    }
+
+    /* map_route: X:247.13, Y:809.79 */
+    #map-route {
+      position: absolute;
+      left: 247.13px;
+      top: 809.79px;
+      width: 710px;
+      height: 640px;
+    }
+
+    .transport-option {
+      position: absolute;
+      width: 258px;
+      height: 287px;
+      display: none;
+    }
+
+    .transport-option.is-visible {
+      display: block;
+      transform-origin: center;
+      animation: transport-highlight 7s ease-in-out var(--highlight-delay) infinite;
+    }
+
+    .transport-option img {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      transform-origin: center;
+    }
+
+    .transport-option.is-visible img {
+      animation: transport-drop 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--pop-delay) forwards;
+    }
+
+    @keyframes transport-drop {
+      0%   { opacity: 0; transform: translateY(-60px) scale(0.96); }
+      60%  { opacity: 1; transform: translateY(6px) scaleX(1.04) scaleY(0.94); }
+      78%  { opacity: 1; transform: translateY(-3px) scaleX(0.99) scaleY(1.02); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes transport-highlight {
+      0%, 7%, 100% {
+        transform: scale(1);
+        filter: brightness(1) drop-shadow(0 0 0 rgba(64, 122, 185, 0));
+      }
+      3.5% {
+        transform: scale(1.025);
+        filter: brightness(1.04) drop-shadow(0 8px 18px rgba(64, 122, 185, 0.22));
+      }
+    }
+
+    #map-air-transport {
+      left: 339.37px;
+      top: 691.92px;
+      --pop-delay: 0s;
+      --highlight-delay: 2.9s;
+    }
+
+    #map-road-transport {
+      left: 665.39px;
+      top: 891.8px;
+      --pop-delay: 0.4s;
+      --highlight-delay: 3.35s;
+    }
+
+    #map-rail-transport {
+      left: 372.98px;
+      top: 1020.78px;
+      --pop-delay: 0.8s;
+      --highlight-delay: 3.8s;
+    }
+
+    #map-sea-transport {
+      left: 594.89px;
+      top: 1243.82px;
+      --pop-delay: 1.2s;
+      --highlight-delay: 4.25s;
+    }
+
+    /* china_pin: X:820.58, Y:556.08 */
+    #china-pin {
+      position: absolute;
+      z-index: 2;
+      left: 820.58px;
+      top: 556.08px;
+      width: 113px;
+      height: 162px;
+    }
+
+    /* vietnam_pin: X:137.97, Y:1258.23 */
+    #vietnam-pin {
+      position: absolute;
+      z-index: 2;
+      left: 137.97px;
+      top: 1258.23px;
+      width: 113px;
+      height: 162px;
+    }
+
+    /* ── 핀: 털썩 낙하 등장 ── */
+    @keyframes drop-in {
+      0%   { opacity: 0; transform: translateY(-60px) scale(0.85); }
+      60%  { opacity: 1; transform: translateY(10px) scale(1.05); }
+      80%  { transform: translateY(-4px) scale(0.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .pop {
+      opacity: 0;
+    }
+
+    #china-pin {
+      animation:
+        drop-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.15s forwards,
+        china-signal 2.85s ease-in-out 2.55s infinite;
+    }
+
+    #vietnam-pin {
+      animation:
+        drop-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.95s forwards,
+        vietnam-signal 2.85s ease-in-out 2.55s infinite;
+    }
+
+    @keyframes china-signal {
+      0%, 14.32%, 100% { transform: scale(1); }
+      2.39%             { transform: scale(0.96); }
+      7.16%             { transform: scale(1.14); }
+      11.93%            { transform: scale(1.02); }
+    }
+
+    @keyframes vietnam-signal {
+      0%, 28.35%, 42.67%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+      31.93%                     { transform: translateY(-8px) scale(1.15) rotate(-3deg); }
+      35.51%                     { transform: translateY(2px) scale(0.96) rotate(3deg); }
+      39.09%                     { transform: translateY(-2px) scale(1.03) rotate(-2deg); }
+    }
+
+    /* ── 핸스트 슬라이드업 페이드인 ── */
+    @keyframes slide-up-fade {
+      0%   { opacity: 0; transform: translateX(var(--slide-x, -50%)) translateY(20px); }
+      100% { opacity: 1; transform: translateX(var(--slide-x, -50%)) translateY(0); }
+    }
+
+    /* 중국 텍스트: 핀 아래 28px */
+    #label-china {
+      position: absolute;
+      left: 877px;          /* 핀 중앙 X */
+      top: 739px;           /* 556.08 + 162 + 21 */
+      transform: translateX(-50%);
+      font-family: 'Pretendard', sans-serif;
+      font-weight: 800;
+      font-size: 53px;
+      color: #0F1811;
+      white-space: nowrap;
+      opacity: 0;
+      animation: slide-up-fade 0.45s ease-out forwards;
+      animation-delay: 0.55s;
+    }
+
+    /* 베트남 텍스트: 핀 아래 21px */
+    #label-vietnam {
+      position: absolute;
+      left: 194px;          /* 핀 중앙 X */
+      top: 1441px;          /* 1258.23 + 162 + 21 */
+      transform: translateX(-50%);
+      font-family: 'Pretendard', sans-serif;
+      font-weight: 800;
+      font-size: 53px;
+      color: #0F1811;
+      white-space: nowrap;
+      opacity: 0;
+      animation: slide-up-fade 0.45s ease-out forwards;
+      animation-delay: 1.35s; /* 베트남 핀 착지(0.95+0.4s) 직후 */
+    }
+
+    /* 15톤 운송 라벨: 차량 가로 중앙, 차량 하단에서 16px */
+    #delivery-weight {
+      position: absolute;
+      left: 580.91px;
+      top: 1347.75px;
+      width: 205px;
+      height: 89px;
+      z-index: 2;
+      --slide-x: 0px;
+      opacity: 0;
+      animation: slide-up-fade 0.45s ease-out forwards;
+      animation-delay: 1.6s;
+    }
+
+    #truck-wrap.is-hidden,
+    #delivery-weight.is-hidden {
+      display: none;
+    }
+
+    #intro-text.is-hidden,
+    .transport-option.is-hidden {
+      display: none;
+    }
+
+    /* 장면 3: 퀴즈 질문 카드 */
+    #question-prompt {
+      position: absolute;
+      left: 149.4212px;
+      top: 109.31px;
+      width: 801px;
+      z-index: 45;
+      display: none;
+      opacity: 0;
+    }
+
+    @keyframes card-drop {
+      0%   { opacity: 0; transform: translateY(-450px) scale(0.95); }
+      55%  { opacity: 1; transform: translateY(18px) scale(1.02); }
+      72%  { transform: translateY(-8px) scale(0.99); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    #question-prompt.is-visible {
+      display: block;
+      animation: card-drop 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.4s forwards;
+    }
+
+    #map-co2-wrap {
+      position: absolute;
+      left: 390.23px;
+      top: 928.46px;
+      width: 459px;
+      height: 459px;
+      display: none;
+    }
+
+    #map-co2-wrap.is-visible {
+      display: block;
+    }
+
+    #map-co2 {
+      position: relative;
+      z-index: 2;
+      width: 459px;
+      height: 459px;
+      opacity: 0;
+      transform-origin: center;
+      animation: pop-in-center 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.8s forwards;
+    }
+
+    #map-co2-wrap .pulse-ring {
+      width: 459px;
+      height: 459px;
+      background: rgba(64, 122, 185, 0.9);
+    }
+
+    .scene3-question-mark {
+      position: absolute;
+      z-index: 3;
+      display: none;
+      opacity: 0;
+      transform-origin: 50% 85%;
+    }
+
+    .scene3-question-mark.is-visible {
+      display: block;
+    }
+
+    @keyframes question-mark-pop {
+      0%   { opacity: 0; transform: scale(0); }
+      60%  { opacity: 1; transform: scale(1.18); }
+      80%  { opacity: 1; transform: scale(0.94); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes question-mark-tilt {
+      0%, 60%, 100% { transform: rotate(0deg); }
+      12%           { transform: rotate(-8deg); }
+      24%           { transform: rotate(8deg); }
+      36%           { transform: rotate(-5deg); }
+      48%           { transform: rotate(4deg); }
+    }
+
+    #question-mark {
+      left: 471.52px;
+      top: 720.23px;
+      width: 95px;
+      height: 163px;
+    }
+
+    #question-mark.is-visible {
+      animation:
+        question-mark-pop 0.4s cubic-bezier(0.22, 1, 0.36, 1) 1.05s forwards,
+        question-mark-tilt 2.2s ease-in-out 1.55s infinite;
+    }
+
+    #question-mark2 {
+      left: 587.97px;
+      top: 725.57px;
+      width: 80px;
+      height: 137px;
+    }
+
+    #question-mark2.is-visible {
+      animation:
+        question-mark-pop 0.4s cubic-bezier(0.22, 1, 0.36, 1) 1.15s forwards,
+        question-mark-tilt 2.2s ease-in-out 1.65s infinite;
+    }
+
+
+    @keyframes reveal-down {
+      0%, 13.12% { opacity: 0; clip-path: inset(0 0 100% 0); }
+      14.32%     { opacity: 1; clip-path: inset(0 0 100% 0); }
+      53.68%     { opacity: 1; clip-path: inset(0 0 0% 0); }
+      69.19%     { opacity: 1; clip-path: inset(0 0 0% 0); }
+      83.51%     { opacity: 0; clip-path: inset(0 0 0% 0); }
+      84.70%, 100% { opacity: 0; clip-path: inset(0 0 100% 0); }
+    }
+
+    @keyframes initial-route-reveal {
+      0%      { opacity: 0; clip-path: inset(0 0 100% 0); }
+      55%     { opacity: 1; clip-path: inset(0 0 0% 0); }
+      80%     { opacity: 1; clip-path: inset(0 0 0% 0); }
+      100%    { opacity: 0; clip-path: inset(0 0 0% 0); }
+    }
+
+    #map-route {
+      opacity: 0;
+      animation:
+        initial-route-reveal 2s ease-in-out 0.55s forwards,
+        reveal-down 2.85s ease-in-out 2.55s infinite;
+    }
+
+    /* ── 15t: 위치 ── */
+    #truck-wrap {
+      position: absolute;
+      left: 487.91px;
+      top: 938.75px;
+      width: 391px;
+      height: 393px;
+    }
+
+    @keyframes pop-in-center {
+      0%   { opacity: 0; transform: scale(0); }
+      65%  { opacity: 1; transform: scale(1.12); }
+      82%  { opacity: 1; transform: scale(0.96); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    #truck-img {
+      position: relative;
+      z-index: 2;
+      width: 391px;
+      height: 393px;
+      opacity: 0;
+      transform-origin: center;
+      animation: pop-in-center 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      animation-delay: 1.2s;
+    }
+
+    /* ── 폄 폄 파동 펌스 ── */
+    .pulse-ring {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      width: 391px;
+      height: 391px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.45);
+      z-index: 1;
+      opacity: 0;
+      animation: pulse-out 2s ease-out infinite;
+    }
+
+    /* 장면 1 트럭: 지도 경로가 완전히 나타나는 시점부터 시작 */
+    #truck-wrap .pulse-ring:nth-child(1) { animation-delay: 1.55s; }
+    #truck-wrap .pulse-ring:nth-child(2) { animation-delay: 2.2167s; }
+    #truck-wrap .pulse-ring:nth-child(3) { animation-delay: 2.8833s; }
+
+    /* 장면 3 CO₂: 첫 파동을 1초부터 시작 */
+    #map-co2-wrap .pulse-ring:nth-child(1) { animation-delay: 1s; }
+    #map-co2-wrap .pulse-ring:nth-child(2) { animation-delay: 1.6667s; }
+    #map-co2-wrap .pulse-ring:nth-child(3) { animation-delay: 2.3333s; }
+
+    @keyframes pulse-out {
+      0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0.6; }
+      100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+    }
+
+    /* ── 인트로 텍스트 ── */
+    #intro-text {
+      position: absolute;
+      left: 50%;
+      top: 226.39px;
+      transform: translateX(-50%);
+      text-align: center;
+      font-family: 'Pretendard', sans-serif;
+      font-weight: 600; /* SemiBold */
+      font-size: 50.46px;
+      line-height: 140%;
+      color: #0F1811;
+      white-space: nowrap;
+    }
+
+    /* 타이핑 커서 */
+    #intro-text .cursor {
+      display: inline-block;
+      width: 3px;
+      background: #0F1811;
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      height: 0.85em;
+      animation: blink 0.7s step-end infinite;
+    }
+
+    /* ExtraBold 강조 */
+    #intro-text .extrabold { font-weight: 800; }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+  </style>
+</head>
+<body>
+
+  <div id="scene-wrapper">
+    <div id="canvas">
+
+      <!-- 배경 -->
+      <img id="bg" src="assets/background.svg" alt="background" draggable="false" decoding="async" />
+
+      <!-- 인트로 텍스트 (타이핑 효과) -->
+      <div id="intro-text">
+        <div class="line" id="line1"></div>
+        <div class="line" id="line2">
+          <span id="seg1"></span><span id="seg2" class="extrabold"></span><span id="seg3"></span>
+        </div>
+      </div>
+
+      <!-- 지도 루트 선 -->
+      <img id="map-route" src="assets/map_route.svg" alt="map route" draggable="false" decoding="async" />
+
+      <!-- 두 번째 화면: 운송수단 -->
+      <div id="map-air-transport" class="transport-option">
+        <img src="assets/map_air_transport.svg" alt="항공 운송" draggable="false" decoding="async" />
+      </div>
+      <div id="map-road-transport" class="transport-option">
+        <img src="assets/map_road_transport.png" alt="도로 운송" draggable="false" decoding="async" />
+      </div>
+      <div id="map-rail-transport" class="transport-option">
+        <img src="assets/map_rail_transport.svg" alt="철도 운송" draggable="false" decoding="async" />
+      </div>
+      <div id="map-sea-transport" class="transport-option">
+        <img src="assets/map_sea_transport.svg" alt="해상 운송" draggable="false" decoding="async" />
+      </div>
+
+      <!-- 핀: 중국 -->
+      <img id="china-pin" class="pop" src="assets/china_pin.svg" alt="china pin" draggable="false" decoding="async" />
+      <span id="label-china">중국</span>
+
+      <!-- 핀: 베트남 -->
+      <img id="vietnam-pin" class="pop" src="assets/vietnam_pin.svg" alt="vietnam pin" draggable="false" decoding="async" />
+      <span id="label-vietnam">베트남</span>
+
+      <!-- 15t 트럭 + 폄 파동 펼스 -->
+      <div id="truck-wrap">
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring"></div>
+        <img id="truck-img" src="assets/15t.svg" alt="15t truck" draggable="false" decoding="async" />
+      </div>
+
+      <!-- 15톤 운송 라벨 -->
+      <img id="delivery-weight" src="assets/15ton.svg" alt="15톤" draggable="false" decoding="async" />
+
+      <!-- 세 번째 화면: 퀴즈 질문 -->
+      <img id="question-prompt" src="assets/question_prompt.svg" alt="퀴즈 질문" draggable="false" decoding="async" />
+
+      <!-- 세 번째 화면: 물음표 -->
+      <img id="question-mark" class="scene3-question-mark" src="assets/question_mark.svg" alt="물음표" draggable="false" decoding="async" />
+      <img id="question-mark2" class="scene3-question-mark" src="assets/question_mark2.svg" alt="물음표" draggable="false" decoding="async" />
+
+      <!-- 세 번째 화면: 탄소 배출량 + 파란색 원형 펄스 -->
+      <div id="map-co2-wrap">
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring"></div>
+        <img id="map-co2" src="assets/map_co2.svg" alt="탄소 배출량" draggable="false" decoding="async" />
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Chromium 79에서도 동작하도록 실제 viewport 기준으로 9:16 크기 계산
+    const DESIGN_WIDTH = 1080;
+    const DESIGN_HEIGHT = 1920;
+    const DESIGN_RATIO = DESIGN_WIDTH / DESIGN_HEIGHT;
+    let resizeFrame = null;
+
+    function scaleCanvas() {
+      const wrapper = document.getElementById('scene-wrapper');
+      const canvas = document.getElementById('canvas');
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+
+      if (!viewportWidth || !viewportHeight) return;
+
+      let wrapperWidth = viewportHeight * DESIGN_RATIO;
+      let wrapperHeight = viewportHeight;
+
+      if (wrapperWidth > viewportWidth) {
+        wrapperWidth = viewportWidth;
+        wrapperHeight = viewportWidth / DESIGN_RATIO;
+      }
+
+      wrapper.style.width = `${wrapperWidth}px`;
+      wrapper.style.height = `${wrapperHeight}px`;
+
+      const scale = Math.min(
+        wrapperWidth / DESIGN_WIDTH,
+        wrapperHeight / DESIGN_HEIGHT
+      );
+      canvas.style.transform = `scale(${scale})`;
+    }
+
+    function scheduleScaleCanvas() {
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = null;
+        scaleCanvas();
+      });
+    }
+
+    scaleCanvas();
+    window.addEventListener('resize', scheduleScaleCanvas);
+    window.addEventListener('orientationchange', scheduleScaleCanvas);
+    window.addEventListener('DOMContentLoaded', scheduleScaleCanvas);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) scheduleScaleCanvas();
+    });
+
+    // 통합 페이지에서 이 화면을 표시한 직후 호출할 수 있는 재계산 진입점
+    window.quiz1Page = window.quiz1Page || {};
+    window.quiz1Page.resize = function () {
+      scaleCanvas();
+      if (scene === 1) lockSceneTransition(INTRO_TRANSITION_LOCK_MS);
+    };
+
+    // ── 타이핑 효과 ──
+    // segments: { el, text } 순서대로 한 글자씩 타이핑
+    const introSegments = [
+      { el: document.getElementById('line1'), text: '중국에서 베트남까지' },
+      { el: document.getElementById('seg1'),  text: '택배를 ' },
+      { el: document.getElementById('seg2'),  text: '15톤 운송' },  // ExtraBold
+      { el: document.getElementById('seg3'),  text: '하려고 해요' },
+    ];
+
+    const transportSegments = [
+      { el: document.getElementById('line1'), text: '그 과정에서 다양한' },
+      { el: document.getElementById('seg1'),  text: '운송수단이 활용돼요' },
+    ];
+
+    let segments = introSegments;
+
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    segments[0].el.appendChild(cursor);
+
+    let segIdx = 0, charIdx = 0;
+    let typingTimer = null;
+    let cursorRemovalTimer = null;
+    let typingComplete = false;
+    let scene = 1;
+    const INPUT_LOCK_MS = 350;
+    const INTRO_TRANSITION_LOCK_MS = 1650;
+    const TRANSPORT_TRANSITION_LOCK_MS = 1900;
+    const QUESTION_TRANSITION_LOCK_MS = 1550;
+    let inputLockedUntil = 0;
+    let sceneTransitionLockedUntil = Date.now() + INTRO_TRANSITION_LOCK_MS;
+
+    function lockInput(duration) {
+      inputLockedUntil = Date.now() + duration;
+    }
+
+    function lockSceneTransition(duration) {
+      sceneTransitionLockedUntil = Date.now() + duration;
+    }
+
+    function resetTyping(nextSegments) {
+      clearTimeout(typingTimer);
+      clearTimeout(cursorRemovalTimer);
+      cursor.remove();
+      document.getElementById('line1').textContent = '';
+      document.getElementById('seg1').textContent = '';
+      document.getElementById('seg2').textContent = '';
+      document.getElementById('seg3').textContent = '';
+
+      segments = nextSegments;
+      segIdx = 0;
+      charIdx = 0;
+      typingComplete = false;
+      cursor.style.transition = '';
+      cursor.style.opacity = '';
+      segments[0].el.appendChild(cursor);
+      typingTimer = setTimeout(typeNext, 200);
+    }
+
+    function showTransportScene() {
+      scene = 2;
+      document.getElementById('truck-wrap').classList.add('is-hidden');
+      document.getElementById('delivery-weight').classList.add('is-hidden');
+      document.querySelectorAll('.transport-option').forEach((option) => {
+        option.classList.add('is-visible');
+      });
+      resetTyping(transportSegments);
+    }
+
+    function showQuestionScene() {
+      scene = 3;
+      clearTimeout(typingTimer);
+      clearTimeout(cursorRemovalTimer);
+      cursor.remove();
+      document.getElementById('intro-text').classList.add('is-hidden');
+      document.querySelectorAll('.transport-option').forEach((option) => {
+        option.classList.add('is-hidden');
+      });
+      document.getElementById('question-prompt').classList.add('is-visible');
+      document.querySelectorAll('.scene3-question-mark').forEach((questionMark) => {
+        questionMark.classList.add('is-visible');
+      });
+      document.getElementById('map-co2-wrap').classList.add('is-visible');
+    }
+
+    function finishTypingImmediately() {
+      if (typingComplete) return;
+
+      typingComplete = true;
+      clearTimeout(typingTimer);
+      segments.forEach(({ el, text }) => {
+        el.textContent = text;
+      });
+      cursor.remove();
+    }
+
+    function typeNext() {
+      if (typingComplete) return;
+
+      if (segIdx >= segments.length) {
+        typingComplete = true;
+        cursor.style.transition = 'opacity 0.5s';
+        cursor.style.opacity = '0';
+        cursorRemovalTimer = setTimeout(() => cursor.remove(), 600);
+        return;
+      }
+      const { el, text } = segments[segIdx];
+      if (charIdx < text.length) {
+        el.insertBefore(
+          document.createTextNode(text[charIdx]),
+          el.querySelector('.cursor') || null
+        );
+        charIdx++;
+        typingTimer = setTimeout(typeNext, 65);
+      } else {
+        segIdx++;
+        charIdx = 0;
+        if (segIdx < segments.length) {
+          segments[segIdx].el.appendChild(cursor);
+          typingTimer = setTimeout(typeNext, 65);
+        } else {
+          typeNext();
+        }
+      }
+    }
+
+    const sceneWrapper = document.getElementById('scene-wrapper');
+
+    function handleScenePointerDown(event) {
+      if (document.hidden || sceneWrapper.getClientRects().length === 0) return;
+      if (event.isPrimary === false) return;
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      if (Date.now() < inputLockedUntil) return;
+
+      if (!typingComplete) {
+        finishTypingImmediately();
+        lockInput(INPUT_LOCK_MS);
+        return;
+      }
+
+      if (Date.now() < sceneTransitionLockedUntil) return;
+
+      if (scene === 1) {
+        showTransportScene();
+        lockInput(INPUT_LOCK_MS);
+        lockSceneTransition(TRANSPORT_TRANSITION_LOCK_MS);
+      } else if (scene === 2) {
+        showQuestionScene();
+        lockInput(INPUT_LOCK_MS);
+        lockSceneTransition(QUESTION_TRANSITION_LOCK_MS);
+      } else if (scene === 3) {
+        window.parent.postMessage({ type: 'navigate', url: encodeURI('./퀴즈1/quiz_game_(4-7).html') }, '*');
+      }
+    }
+
+    function preventSceneContextMenu(event) {
+      event.preventDefault();
+    }
+
+    sceneWrapper.addEventListener('pointerdown', handleScenePointerDown);
+    sceneWrapper.addEventListener('contextmenu', preventSceneContextMenu);
+    typingTimer = setTimeout(typeNext, 200);
+  </script>
+
+</body>
+</html>

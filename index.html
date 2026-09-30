@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>저구와 함께하는 퀴즈타임</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #000;
+        }
+        iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            border: none;
+            display: block;
+            transition: opacity 0.3s;
+        }
+        /* 드래그 및 선택 방지 */
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+        /* 숨겨진 전체화면 토글 버튼 */
+        #fullscreen-toggle {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 80px;
+            height: 80px;
+            z-index: 9999;
+            cursor: pointer;
+            /* background-color: rgba(255,0,0,0.5); /* 디버깅용: 필요시 주석 해제하여 위치 확인 */
+        }
+    </style>
+</head>
+<body>
+    <div id="fullscreen-toggle"></div>
+    <audio id="bgm-player" src="./funk-breakbeat.m4a" loop></audio>
+    <iframe id="game-frame" src="./도로화면/scene1.html"></iframe>
+
+    <script>
+        // 우클릭 방지
+        document.addEventListener('contextmenu', event => event.preventDefault());
+
+        // 전체화면 토글 로직
+        const fullscreenToggle = document.getElementById('fullscreen-toggle');
+        fullscreenToggle.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(err => {
+                        console.log(`Error attempting to enable fullscreen: ${err.message}`);
+                    });
+                } else if (document.documentElement.webkitRequestFullscreen) { /* Safari */
+                    document.documentElement.webkitRequestFullscreen();
+                } else if (document.documentElement.msRequestFullscreen) { /* IE11 */
+                    document.documentElement.msRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) { /* Safari */
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) { /* IE11 */
+                    document.msExitFullscreen();
+                }
+            }
+        });
+
+        const bgmPlayer = document.getElementById('bgm-player');
+        bgmPlayer.volume = 0.15; // Set volume as requested
+        const gameFrame = document.getElementById('game-frame');
+
+        let isBgmUnlocked = false;
+
+        function ensureBgmPlaying() {
+            if (isBgmUnlocked && bgmPlayer.paused) {
+                bgmPlayer.play().catch(e => console.log('BGM Autoplay/Resume blocked:', e));
+            }
+        }
+
+        // BGM이 예기치 않게 일시정지될 경우 (OS 포커스 해제, 재생 정책 등) 자동 다시 재생
+        bgmPlayer.addEventListener('pause', () => {
+            ensureBgmPlaying();
+        });
+
+        // 1초 간격으로 재생 상태 유지 점검
+        setInterval(ensureBgmPlaying, 1000);
+
+        let currentIframe = document.getElementById('game-frame');
+
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+            if (!data) return;
+
+            if (data.type === 'interaction') {
+                isBgmUnlocked = true;
+                ensureBgmPlaying();
+            } else if (data.type === 'navigate') {
+                try {
+                    const targetAbsolute = new URL(data.url, window.location.href).href;
+                    if (currentIframe.contentWindow && currentIframe.contentWindow.location.href === targetAbsolute) {
+                        currentIframe.contentWindow.location.reload();
+                    } else {
+                        // Double buffering for seamless transition
+                        const newIframe = document.createElement('iframe');
+                        newIframe.src = data.url;
+                        newIframe.style.opacity = '0'; // Hide initially
+                        document.body.appendChild(newIframe);
+
+                        newIframe.addEventListener('load', () => {
+                            // Show new iframe
+                            newIframe.style.opacity = '1';
+                            // Remove old iframe after transition
+                            setTimeout(() => {
+                                if (currentIframe && currentIframe.parentNode) {
+                                    currentIframe.parentNode.removeChild(currentIframe);
+                                }
+                                currentIframe = newIframe;
+                                currentIframe.id = 'game-frame';
+                            }, 300);
+                        }, { once: true });
+                    }
+                } catch (e) {
+                    currentIframe.src = data.url;
+                }
+                ensureBgmPlaying();
+            }
+        });
+    </script>
+</body>
+</html>

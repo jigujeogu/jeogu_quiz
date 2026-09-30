@@ -1,0 +1,1649 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preload" href="../fonts/PretendardVariable.woff2" as="font" type="font/woff2" crossorigin />
+  <title>다크패턴 쇼핑몰 퀴즈</title>
+  <style>
+@font-face {
+      font-family: "Pretendard";
+      src: url("../fonts/PretendardVariable.woff2") format("woff2");
+      font-weight: 45 920;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100vw; height: 100vh;
+      overflow: hidden;
+      background: #111;
+      font-family: "Pretendard", "Apple SD Gothic Neo", sans-serif;
+      display: flex; align-items: center; justify-content: center;
+    }
+    /* 캔버스 고정 크기 - transform으로 스케일 */
+    #intro-scene {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      transform-origin: center center;
+      flex-shrink: 0;
+      background: #fff;
+    }
+    #bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+    #mall-gradient {
+      position: absolute;
+      inset: -4px;
+      background: linear-gradient(180deg, 
+        #ffffff 0px, 
+        #ffffff 187.13px, 
+        rgba(255, 255, 255, 0.67) 578.7px, 
+        rgba(255, 255, 255, 0.19) 1920px
+      );
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    #typing-wrap { position: absolute; top: 226.39px; left: 184.48px; right: 184.48px; text-align: center; z-index: 40; }
+    #typing-text { font-family: "Pretendard", sans-serif; font-weight: 600; font-size: 52px; line-height: 1.4; color: #0F1811; letter-spacing: -0.02em; white-space: pre-wrap; min-height: 2.8em; }
+    #cursor { display: inline-block; width: 3px; height: 1em; background: #0F1811; margin-left: 2px; vertical-align: middle; animation: blink 0.75s step-end infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    .mall-icon {
+      position: absolute;
+      opacity: 0;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .mall-icon img { width: 100%; height: 100%; display: block; }
+    /* PNG에 180px 그림자 여백을 사전 합성. 내부 로고의 기존 좌표와 회전 중심은 동일하게 유지 */
+    #icon-shein  { width: 1260px; height: 1260px; left:   80px; bottom:  700px; --rot: -13deg; }
+    #icon-ali    { width: 1350px; height: 1350px; left: -350px; bottom:  -30px; --rot:   9deg; }
+    #icon-temu   { width: 1260px; height: 1260px; left:  240px; bottom: -110px; --rot:  -6deg; }
+    @keyframes fallLand {
+      0%   { opacity: 0; transform: translate3d(0, -1500px, 0) rotate(calc(var(--rot) * -0.3)) scale(1.0); }
+      12%  { opacity: 1; }
+      45%  { transform: translate3d(0, 40px, 0)  rotate(calc(var(--rot) * 0.6)) scale(0.93, 1.07); } /* 착지 찌그러짐 */
+      65%  { transform: translate3d(0, -60px, 0) rotate(calc(var(--rot) * 1.15)) scale(1.03, 0.97); } /* 1회 반동 */
+      100% { opacity: 1; transform: translate3d(0, 0, 0) rotate(var(--rot)) scale(1); }
+    }
+    .mall-icon.landing {
+      animation: fallLand 0.75s cubic-bezier(0.15, 0.85, 0.35, 1) forwards;
+      will-change: transform, opacity;
+    }
+
+    /* ── 타이핑 텍스트 페이드아웃 ── */
+    #typing-wrap { transition: opacity 0.4s ease; }
+    #typing-wrap.fade-out { opacity: 0; pointer-events: none; }
+
+    /* ── 캐러셀 (screen 2) ── */
+    #carousel-wrap {
+      position: absolute;
+      top: 50%;
+      left: -4px;
+      width: 1088px;
+      overflow: visible;
+      z-index: 30;
+      display: block;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-50%);
+    }
+    #carousel-wrap.visible { opacity: 1; }
+    .carousel-track {
+      display: flex;
+      width: max-content;
+      transform: translate3d(0, 0, 0);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .carousel-item {
+      width: 540px;
+      height: 540px;
+      margin-right: 90px;
+      flex-shrink: 0;
+    }
+    .carousel-item img { width: 100%; height: 100%; object-fit: contain; }
+    @keyframes scrollLeft {
+      0%   { transform: translate3d(0, 0, 0); }
+      100% { transform: translate3d(calc(-5 * (540px + 90px)), 0, 0); }
+    }
+    .carousel-track.running {
+      animation: scrollLeft 10s linear infinite;
+      will-change: transform;
+    }
+
+    /* ── 퀴즈 카드 (screen 2) ── */
+    #quiz-card {
+      position: absolute;
+      top: 109.31px;
+      left: 90.64px;
+      width: 907px;
+      z-index: 45;
+      display: none;
+      opacity: 0;
+    }
+    @keyframes cardDrop {
+      0%   { opacity: 0; transform: translateY(-450px) scale(0.95); }
+      55%  { opacity: 1; transform: translateY(18px) scale(1.02); }
+      72%  { transform: translateY(-8px) scale(0.99); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #111;
+      font-family: "Pretendard", "Apple SD Gothic Neo", sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #quiz-scene {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      transform-origin: center center;
+      flex-shrink: 0;
+      background: #fff;
+    }
+
+    #quiz-scene.has-overlay {
+      background: #0F1811;
+    }
+
+    /* 고정 영역: quiz_header(1080x447) + progress_bar */
+    #fixed-zone {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 447px;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    #quiz-header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 447px;
+    }
+
+    /* progress_bar_0: X:86.2 Y:386.93 */
+    #progress-bar {
+      position: absolute;
+      top: 386.93px;
+      left: 86.2px;
+      width: 908px;
+      height: 13px;
+    }
+
+    /* 스크롤 영역: 마키 배너(143px) 아래부터 = 446.47 + 143 = 589.47px */
+    #scroll-zone {
+      position: absolute;
+      top: 589.47px;
+      left: 0;
+      width: 1080px;
+      height: 1330.53px;
+      /* 1920 - 589.47 */
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    /* 커스텀 스크롤바: 마키 배너 영역 제외 */
+    #scroll-zone::-webkit-scrollbar {
+      width: 12px;
+    }
+
+    #scroll-zone::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #scroll-zone::-webkit-scrollbar-thumb {
+      background: #797979;
+      border-radius: 4px;
+    }
+
+    #scroll-zone::-webkit-scrollbar-thumb:hover {
+      background: #5a5a5a;
+    }
+
+    #scroll-content {
+      position: relative;
+      width: 1080px;
+      height: 2907.55px;
+      /* shopping-mall의 bottom: -143px + 3050.55px = 2907.55px 에 딱 맞춤 */
+    }
+
+    /* shopping_mall: 캔버스 Y:446.47에 시작하는 이미지
+       scroll-zone이 589.47에서 시작하므로
+       scroll-content 내 top = 446.47 - 589.47 = -143px
+       (마키 배너 뒤에 가려진 영역) */
+    #shopping-mall {
+      position: absolute;
+      top: -143px;
+      left: 0;
+      width: 1080px;
+      height: 3050.55px;
+    }
+
+    /* shopping_mall_large_banner: 캔버스 Y:778.19
+       scroll-content 내 top = 778.19 - 589.47 = 188.72px */
+    #large-banner {
+      position: absolute;
+      top: 188.72px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1013px;
+      height: 392px;
+      z-index: 10;
+    }
+
+    #discount-deal-wrapper {
+      position: absolute;
+      top: 1279.4px;
+      left: 758.67px;
+      width: 274px;
+      height: 274px;
+      z-index: 30;
+    }
+
+    /* discount_deal: 캔버스 X:758.67 Y:1868.87
+       scroll-content top = 1868.87 - 589.47 = 1279.4px */
+    #discount-deal {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 274px;
+      height: 274px;
+      /* discount_timer(z-index:20)보다 항상 위에 표시 */
+      animation: floatBob 2.4s ease-in-out infinite;
+      transform-origin: center center;
+      will-change: transform;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+
+    @keyframes floatBob {
+      0% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+      }
+
+      30% {
+        transform: translate3d(0, -18px, 0) rotate(2deg);
+      }
+
+      60% {
+        transform: translate3d(0, -10px, 0) rotate(-1.5deg);
+      }
+
+      100% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+      }
+    }
+
+    /* sold_out_soon 래퍼 */
+    #sold-out-wrapper {
+      position: absolute;
+      top: 1827.03px;
+      left: 58.19px;
+      width: 359px;
+      height: 93px;
+      z-index: 20;
+      transform-origin: center center;
+    }
+
+    /* 콩닥콩닥 심장박동 애니메이션 */
+    @keyframes heartbeat {
+      0% {
+        transform: scale(1);
+      }
+
+      15% {
+        transform: scale(1.10);
+      }
+
+      /* 첫 박동 */
+      28% {
+        transform: scale(0.96);
+      }
+
+      /* 잌간 수쳕 */
+      42% {
+        transform: scale(1.06);
+      }
+
+      /* 두번째 박동 */
+      60% {
+        transform: scale(1);
+      }
+
+      /* 원위 복귀 */
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    #sold-out-wrapper.pulse {
+      animation: heartbeat 0.55s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
+    }
+
+    #sold-out-soon {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 359px;
+      height: 93px;
+    }
+
+    /* 'n개 남음' 텍스트: SVG 안 오른쪽 빈 공간(x≈190~355) 중앙 */
+    #countdown-text {
+      position: absolute;
+      left: 185px;
+      top: 50%;
+      transform: translateY(calc(-50% - 2px));
+      font-family: "Pretendard", "Apple SD Gothic Neo", sans-serif;
+      font-weight: 400;
+      font-size: 41.89px;
+      color: #0F1811;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    /* discount_timer 래퍼 */
+    #timer-wrapper {
+      position: absolute;
+      top: 1773.4px;
+      left: 574.14px;
+      width: 308px;
+      height: 146px;
+      z-index: 20;
+    }
+
+    #discount-timer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 308px;
+      height: 146px;
+    }
+
+    /* 초록 박스 위 숫자 오버레이
+       박스: x=15.18, x=112.49, x=209.81 / y=67.81 / w=79.60 / h=59.70 */
+    .timer-digit {
+      position: absolute;
+      top: 67.81px;
+      height: 59.70px;
+      width: 79.60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "Pretendard", "Apple SD Gothic Neo", sans-serif;
+      font-weight: 700;
+      /* Bold */
+      font-size: 41.89px;
+      color: #0F1811;
+      line-height: 1;
+    }
+
+    #timer-min {
+      left: 15.18px;
+    }
+
+    #timer-sec {
+      left: 112.49px;
+    }
+
+    #timer-cs {
+      left: 209.81px;
+    }
+
+    /* 마키 배너: scroll-zone 밖, 절대 고정 레이어 */
+    #marquee-wrapper {
+      position: absolute;
+      top: 446.47px;
+      left: 0;
+      width: 1080px;
+      height: 143px;
+      overflow: hidden;
+      z-index: 50;
+      cursor: pointer;
+      /* 클릭 가능 */
+    }
+
+    #marquee-track {
+      display: flex;
+      width: max-content;
+      height: 143px;
+      animation: marqueeScroll 12s linear infinite;
+      will-change: transform;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+
+    #marquee-track img {
+      width: 1717px;
+      height: 143px;
+      flex-shrink: 0;
+      display: block;
+      margin-right: -12px;
+    }
+
+    @keyframes marqueeScroll {
+      0% {
+        transform: translate3d(0, 0, 0);
+      }
+
+      100% {
+        transform: translate3d(-1705px, 0, 0);
+      }
+    }
+
+    /* 클릭 가능한 다크패턴 요소 및 터치/클릭 프레스 모션 */
+    #timer-wrapper,
+    #discount-deal,
+    #sold-out-wrapper,
+    #large-banner,
+    #marquee-wrapper {
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.08s cubic-bezier(0.4, 0, 0.2, 1), filter 0.08s ease;
+    }
+
+    #large-banner:not(.solved):active {
+      transform: translateX(-50%) scale(0.97);
+      filter: brightness(0.96);
+    }
+
+    #discount-deal:not(.solved):active {
+      transform: scale(0.93) !important;
+      filter: brightness(0.95);
+    }
+
+    #sold-out-wrapper:not(.solved):active {
+      transform: scale(0.95);
+      filter: brightness(0.96);
+    }
+
+    #timer-wrapper:not(.solved):active {
+      transform: scale(0.95);
+      filter: brightness(0.96);
+    }
+
+    #marquee-wrapper:not(.solved):active {
+      transform: scale(0.985);
+      filter: brightness(0.96);
+    }
+
+    /* 일반 정답 및 축하 팝업 공통 오버레이: 검정 50% */
+    #overlay {
+      position: absolute;
+      top: -10px;
+      left: -10px;
+      width: calc(100% + 20px);
+      height: calc(100% + 20px);
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 200;
+      display: none;
+      cursor: pointer;
+    }
+
+    /* 팝업 등장 애니메이션 */
+    @keyframes popupSlideUp {
+      0% {
+        transform: translate(-50%, 100%);
+        opacity: 0;
+      }
+
+      100% {
+        transform: translate(-50%, 0);
+        opacity: 1;
+      }
+    }
+
+    /* 원형 아이콘 뽀잉 (탄력 팝인) 애니메이션 - GPU 가속 및 부드러운 스케일링 */
+    @keyframes bboingPop {
+      0% {
+        transform: translate3d(-50%, 0, 0) scale(0);
+        opacity: 0;
+      }
+
+      60% {
+        transform: translate3d(-50%, 0, 0) scale(1.06);
+        opacity: 1;
+      }
+
+      82% {
+        transform: translate3d(-50%, 0, 0) scale(0.98);
+      }
+
+      100% {
+        transform: translate3d(-50%, 0, 0) scale(1);
+        opacity: 1;
+      }
+    }
+
+    /* 팝업: answer SVG (1079×615) 화면 하단 */
+    #popup-layer {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1084px;
+      height: 615px;
+      z-index: 300;
+      display: none;
+      pointer-events: none;
+      /* 클릭 오버레이로 통과 → 닫기 동작 */
+    }
+
+    #popup-layer.show {
+      display: block;
+      animation: popupSlideUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    #popup-layer img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* 팝업 원형 아이콘: X축 가운데 정렬, Y: 1632.2 (3px 위로 이동) */
+    #popup-circle-icon {
+      position: absolute;
+      top: 1632.2px;
+      left: 50%;
+      transform: translate3d(-50%, 0, 0) scale(0);
+      transform-origin: center center;
+      width: 266px;
+      height: 266px;
+      z-index: 310;
+      display: none;
+      pointer-events: none;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+
+    #popup-circle-icon.bboing {
+      display: block;
+      animation: bboingPop 0.4s cubic-bezier(0.25, 1, 0.5, 1) 0.1s forwards;
+    }
+
+    /* 활성 요소: 오버레이 위로 */
+    .quiz-active {
+      z-index: 300 !important;
+      cursor: default;
+    }
+
+    /* 정답 맞춘 요소: 모션 정지, 흑백 처리 및 클릭 비활성화 */
+    .solved {
+      filter: grayscale(100%) !important;
+      animation: none !important;
+      pointer-events: none !important;
+      cursor: default !important;
+    }
+
+    .solved #marquee-track {
+      animation: none !important;
+    }
+
+    .solved.pulse {
+      animation: none !important;
+    }
+
+    /* 컨패티 캔버스: 팝업 뒤(z-index: 250), 오버레이 위 */
+    #confetti-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1080px;
+      height: 1920px;
+      z-index: 250;
+      pointer-events: none;
+      display: none;
+    }
+
+    /* ══ 축하(Congratulation) 팝업 ══ */
+    #congratulation-wrap {
+      position: absolute;
+      top: 516.93px;
+      left: 50%;
+      transform: translateX(-50%) scale(0.9);
+      width: 799px;
+      height: 866px;
+      z-index: 300;
+      display: none;
+      opacity: 0;
+      pointer-events: auto;
+    }
+
+    #congratulation-wrap.show {
+      display: block;
+      animation: congratsPop 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    @keyframes congratsPop {
+      0% {
+        transform: translateX(-50%) scale(0.85);
+        opacity: 0;
+      }
+
+      60% {
+        transform: translateX(-50%) scale(1.03);
+        opacity: 1;
+      }
+
+      100% {
+        transform: translateX(-50%) scale(1);
+        opacity: 1;
+      }
+    }
+
+    #congratulation-img {
+      width: 799px;
+      height: 866px;
+      display: block;
+    }
+
+    /* Next 버튼 (X축 가운데 정렬, Y: 1127.18 -> 팝업 기준 top: 610.25px) */
+    #btn-next {
+      position: absolute;
+      top: 610.25px;
+      /* 1127.18 - 516.93 */
+      left: 50%;
+      transform: translateX(-50%);
+      width: 553px;
+      height: 119px;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      outline: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), filter 0.1s ease;
+    }
+
+    #btn-next img {
+      width: 553px;
+      height: 119px;
+      display: block;
+    }
+
+    /* 버튼 누를 때 쫀득한 프레스 모션 */
+    #btn-next:active {
+      transform: translateX(-50%) translateY(4px) scale(0.97);
+      filter: brightness(0.95);
+    }
+
+    /* 통합 화면 표시 상태: 한 번에 하나의 1080×1920 장면만 노출 */
+    #quiz-scene {
+      display: none;
+    }
+  </style>
+  <script src="../bgm.js"></script>
+  <script src="../back_button.js"></script>
+  <script src="../quiz_sfx_b64.js"></script>
+</head>
+<body>
+  <!-- screen1.html 원본 구조 -->
+  <div id="intro-scene">
+    <img id="bg" src="asset/sky.svg" alt="sky background" />
+  
+    <div id="typing-wrap">
+      <p id="typing-text"><span id="cursor"></span></p>
+    </div>
+    <!-- 그라디언트 오버레이: 아이콘 위, 텍스트 아래 -->
+    <div id="mall-gradient"></div>
+    <div id="icons-area">
+      <div class="mall-icon" id="icon-shein"><img src="asset/shein.png" alt="SHEIN" /></div>
+      <div class="mall-icon" id="icon-ali"><img src="asset/aliexpress.png" alt="AliExpress" /></div>
+      <div class="mall-icon" id="icon-temu"><img src="asset/temu.png" alt="Temu" /></div>
+    </div>
+  
+    <!-- ── 캐러셀 (screen 2) ── -->
+    <div id="carousel-wrap">
+      <div class="carousel-track" id="carousel-track">
+        <div class="carousel-item"><img src="asset/icon_timer.png"    alt="timer"    /></div>
+        <div class="carousel-item"><img src="asset/icon_scissors.png" alt="scissors" /></div>
+        <div class="carousel-item"><img src="asset/icon_gift.png"     alt="gift"     /></div>
+        <div class="carousel-item"><img src="asset/icon_discount.png" alt="discount" /></div>
+        <div class="carousel-item"><img src="asset/icon_cart.png"     alt="cart"     /></div>
+        <!-- 무한 루프용 복제 -->
+        <div class="carousel-item"><img src="asset/icon_timer.png"    alt="timer"    /></div>
+        <div class="carousel-item"><img src="asset/icon_scissors.png" alt="scissors" /></div>
+        <div class="carousel-item"><img src="asset/icon_gift.png"     alt="gift"     /></div>
+        <div class="carousel-item"><img src="asset/icon_discount.png" alt="discount" /></div>
+        <div class="carousel-item"><img src="asset/icon_cart.png"     alt="cart"     /></div>
+      </div>
+    </div>
+  
+    <!-- ── 퀴즈 카드 (screen 2) ── -->
+    <img id="quiz-card" src="asset/quiz_question_2.svg" alt="퀴즈 문제" />
+  
+  </div>
+
+  <!-- screen2.html 원본 구조 -->
+  <div id="quiz-scene">
+      <!-- 고정 영역 -->
+      <div id="fixed-zone">
+        <img id="quiz-header" src="asset/quiz_header.svg" alt="Quiz Header" />
+        <img id="progress-bar" src="asset/progress_bar_0.svg" alt="진행도" />
+      </div>
+      <!-- 스크롤 영역 -->
+      <div id="scroll-zone">
+        <div id="scroll-content">
+          <!-- 쇼핑몰 -->
+          <img id="shopping-mall" src="asset/shopping_mall.png" alt="쇼핑몰" />
+          <!-- 대형 배너: 캔버스 Y:778.19 -->
+          <img id="large-banner" src="asset/shopping_mall_large_banner.svg" alt="대형 배너" />
+          <!-- discount_deal: 캔버스 X:758.67 Y:1868.87 / 둥실 모션 -->
+          <div id="discount-deal-wrapper">
+            <img id="discount-deal" src="asset/discount_deal.svg" alt="89% 할인" />
+          </div>
+          <!-- sold_out_soon: 캔버스 X:70.19 Y:2416.5 -->
+          <div id="sold-out-wrapper">
+            <img id="sold-out-soon" src="asset/sold_out_soon.svg" alt="품절임박" />
+            <span id="countdown-text">5개 남음</span>
+          </div>
+          <!-- discount_timer: 캔버스 X:582.14 Y:2362.87 -->
+          <div id="timer-wrapper">
+            <img id="discount-timer" src="asset/discount_timer.svg" alt="할인 타이머" />
+            <span class="timer-digit" id="timer-min">00</span>
+            <span class="timer-digit" id="timer-sec">59</span>
+            <span class="timer-digit" id="timer-cs">00</span>
+          </div>
+        </div>
+      </div>
+      <!-- 마키 배너: scroll-zone 밖, 절대 고정 레이어 -->
+      <div id="marquee-wrapper">
+        <div id="marquee-track">
+          <img src="asset/shopping_mall_marquee_banner.svg?v=3" alt="마키 배너" />
+          <img src="asset/shopping_mall_marquee_banner.svg?v=3" alt="마키 배너 복제" />
+        </div>
+      </div>
+      <!-- 오버레이 -->
+      <div id="overlay"></div>
+      <!-- 정답 팝업 -->
+      <div id="popup-layer">
+        <img id="popup-img" alt="정답 팝업" />
+      </div>
+      <!-- 팝업 원형 아이콘 (X축 가운데, Y: 1632.2) -->
+      <img id="popup-circle-icon" alt="원형 아이콘" />
+  
+      <!-- ══ 축하 컨패티 캔버스 (팝업 뒤 레이어 z-index: 250) ══ -->
+      <canvas id="confetti-canvas" width="1080" height="1920"></canvas>
+  
+      <!-- ══ 축하(Congratulation) 팝업 (X축 가운데, Y: 516.93) ══ -->
+      <div id="congratulation-wrap">
+        <img id="congratulation-img" src="asset/congratulation_popup.png" alt="축하 팝업" />
+        <button id="btn-next" type="button">
+          <img src="asset/next.svg" alt="다음" />
+        </button>
+      </div>
+    </div>
+
+  <script>
+    /* screen1 전역 선언을 독립 범위로 격리 */
+    (() => {
+      /* 세그먼트별 폰트 굵기 지정
+           weight: 600 = SemiBold, 800 = ExtraBold */
+        const segments = [
+          { text: '여기는 다크패턴을 자주 사용하는', weight: 600 },
+          { text: '\n',                              weight: 600 },
+          { text: '주요 저가 온라인 쇼핑몰',          weight: 800 },
+          { text: '이에요',                           weight: 600 },
+        ];
+      
+        // 세그먼트를 (char, weight) 배열로 평탄화
+        const chars = [];
+        segments.forEach(seg => {
+          for (const ch of seg.text) chars.push({ ch, weight: seg.weight });
+        });
+      
+        const CHAR_INTERVAL = 60; // ms per char (타이핑 속도)
+      
+        const textEl   = document.getElementById('typing-text');
+        const cursorEl = document.getElementById('cursor');
+        let charIndex     = 0;
+        let typingSkipped = false; // 클릭 스킵 여부
+      
+        /* 나머지 글자를 한 번에 출력하는 스킵 함수 */
+        function skipTyping() {
+          if (charIndex >= chars.length) return; // 이미 완료
+          typingSkipped = true;
+      
+          // 남은 글자 전부 즉시 렌더
+          while (charIndex < chars.length) {
+            const { ch, weight } = chars[charIndex++];
+            if (ch === '\n') {
+              textEl.insertBefore(document.createElement('br'), cursorEl);
+            } else {
+              const span = document.createElement('span');
+              span.textContent = ch;
+              span.style.fontWeight = weight;
+              span.style.opacity = '1'; // 즉시 표시
+              textEl.insertBefore(span, cursorEl);
+            }
+          }
+          cursorEl.style.animation = 'none';
+          cursorEl.style.opacity   = '0';
+          screenPhase = 1; // 다음 탭 → screen2
+        }
+      
+        function typeNext() {
+          if (typingSkipped) return; // 스킵됐으면 체인 종료
+          if (charIndex >= chars.length) {
+            screenPhase = 1;  // 다음 탭 → screen2
+            setTimeout(() => { cursorEl.style.animation = 'none'; cursorEl.style.opacity = '0'; }, 1500);
+            return;
+          }
+          const { ch, weight } = chars[charIndex++];
+          if (ch === '\n') {
+            textEl.insertBefore(document.createElement('br'), cursorEl);
+          } else {
+            const span = document.createElement('span');
+            span.textContent = ch;
+            span.style.fontWeight = weight;
+            span.style.opacity = '0';
+            span.style.transition = 'opacity 0.05s';
+            textEl.insertBefore(span, cursorEl);
+            requestAnimationFrame(() => { span.style.opacity = '1'; });
+          }
+          setTimeout(typeNext, CHAR_INTERVAL);
+        }
+      
+        // ── 화면 단계 관리 ──
+        // 0: 타이핑 진행 중  1: 타이핑 완료 대기  2: screen2 진입
+        let screenPhase = 0;
+      
+        /* ── screen2 진입 함수 ── */
+        function enterScreen2() {
+          screenPhase = 2;
+      
+          // 타이핑 텍스트 페이드아웃
+          document.getElementById('typing-wrap').classList.add('fade-out');
+      
+          // 캐러셀 스크롤을 먼저 시작해 GPU 레이어를 준비한 뒤 표시
+          const carouselWrap  = document.getElementById('carousel-wrap');
+          const carouselTrack = document.getElementById('carousel-track');
+          carouselWrap.style.willChange = 'opacity';
+          carouselTrack.classList.add('running');
+          // 두 프레임 동안 합성 레이어를 준비한 후 완성된 캐러셀을 노출
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              carouselWrap.classList.add('visible');
+              requestAnimationFrame(() => { carouselWrap.style.willChange = 'auto'; });
+            });
+          });
+      
+          // 400ms 후 퀴즈 카드 드롭인
+          const quizCard = document.getElementById('quiz-card');
+          setTimeout(() => {
+            quizCard.style.display = 'block';
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                quizCard.style.animation = 'cardDrop 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards';
+              });
+            });
+          }, 400);
+        }
+      
+        /* ── 통합 클릭 핸들러 ── */
+        document.getElementById('intro-scene').addEventListener('click', () => {
+          if (screenPhase === 0 && charIndex > 0 && charIndex < chars.length) {
+            skipTyping();           // 타이핑 스킵
+          } else if (screenPhase === 1) {
+            enterScreen2();         // screen2 전환
+          }
+        });
+      
+        const drops = [
+          { id: 'icon-temu',  delay: 150 },
+          { id: 'icon-ali',   delay: 300 },
+          { id: 'icon-shein', delay: 450 },
+        ];
+      
+        function dropIcon(id, delay) {
+          setTimeout(() => {
+            const el = document.getElementById(id);
+            const releaseIconLayer = () => {
+              // 낙하가 끝난 정적 로고의 전용 GPU 합성 레이어를 해제
+              el.style.willChange = 'auto';
+              el.style.backfaceVisibility = 'visible';
+              el.style.webkitBackfaceVisibility = 'visible';
+            };
+            el.addEventListener('animationend', releaseIconLayer, { once: true });
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+              el.classList.add('landing');
+              setTimeout(releaseIconLayer, 900);
+            }));
+          }, delay);
+        }
+      
+        /* ── 데스크탑 스케일링: 뷰포트에 맞게 9:16 비율 유지 ── */
+        const CANVAS_W = 1080, CANVAS_H = 1920;
+        const scene = document.getElementById('intro-scene');
+      
+        function fitScene() {
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
+          const scale = Math.min(vw / CANVAS_W, vh / CANVAS_H);
+          scene.style.transform = `scale(${scale})`;
+        }
+      
+        window.addEventListener('resize', fitScene);
+        fitScene(); // 즉시 적용
+      
+        window.addEventListener('DOMContentLoaded', () => {
+          fitScene();
+          setTimeout(() => {
+            typeNext();
+          }, 400);
+          drops.forEach(d => dropIcon(d.id, d.delay));
+        });
+    })();
+  </script>
+
+  <script>
+    /* screen2는 실제 화면 전환 시 한 번만 초기화 */
+    window.initQuizScreen = (() => {
+      let initialized = false;
+
+      return function initQuizScreen() {
+        if (initialized) return;
+        initialized = true;
+        const CANVAS_W = 1080, CANVAS_H = 1920;
+            const scene = document.getElementById('quiz-scene');
+            function fitScene() {
+              const scale = Math.min(window.innerWidth / CANVAS_W, window.innerHeight / CANVAS_H);
+              scene.style.transform = `scale(${scale})`;
+            }
+            window.addEventListener('resize', fitScene);
+            fitScene();
+        
+            /* 품절임박 카운트다운: 5→4→3→2→1→5→... 2초 간격 무한 반복 */
+            let soldCount = 5;
+            const countdownEl = document.getElementById('countdown-text');
+        
+            function tickSoldOut() {
+              const wrapper = document.getElementById('sold-out-wrapper');
+              if (wrapper.classList.contains('solved')) return; // 팝업 닫힌 후 정지
+        
+              soldCount--;
+              if (soldCount < 1) soldCount = 5;   // 1 다음에 5로 리셋
+              countdownEl.textContent = soldCount + '개 남음';
+        
+              // 콩닥콩닥 모션: rAF로 리플로우 부하 없이 애니메이션 재시작
+              wrapper.classList.remove('pulse');
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  if (!wrapper.classList.contains('solved')) {
+                    wrapper.classList.add('pulse');
+                  }
+                });
+              });
+        
+              setTimeout(tickSoldOut, 2000);
+            }
+        
+            // 첫 감소는 2초 후 시작
+            setTimeout(tickSoldOut, 2000);
+            /* 할인 타이머: 실제 경과 시간 기준 00:59:00 반복 카운트다운 */
+            const TIMER_DURATION_MS = 59000;
+            const TIMER_TICK_MS = 100;
+            const elMin = document.getElementById('timer-min');
+            const elSec = document.getElementById('timer-sec');
+            const elCs = document.getElementById('timer-cs');
+            const timerWrap = document.getElementById('timer-wrapper');
+            let timerIntervalId = null;
+            let timerCycleStartedAt = 0;
+        
+            function renderDiscountTimer(remainingMs) {
+              const totalCentiseconds = Math.min(5900, Math.max(0, Math.ceil(remainingMs / 10)));
+              const minText = String(Math.floor(totalCentiseconds / 6000)).padStart(2, '0');
+              const secText = String(Math.floor(totalCentiseconds / 100) % 60).padStart(2, '0');
+              const csText = String(totalCentiseconds % 100).padStart(2, '0');
+        
+              if (elMin.textContent !== minText) elMin.textContent = minText;
+              if (elSec.textContent !== secText) elSec.textContent = secText;
+              if (elCs.textContent !== csText) elCs.textContent = csText;
+            }
+        
+            function stopDiscountTimer() {
+              if (timerIntervalId === null) return;
+              clearInterval(timerIntervalId);
+              timerIntervalId = null;
+            }
+        
+            function tickDiscountTimer() {
+              if (timerWrap.classList.contains('solved')) {
+                stopDiscountTimer();
+                return;
+              }
+        
+              const elapsedMs = Math.max(0, performance.now() - timerCycleStartedAt);
+              const remainingMs = TIMER_DURATION_MS - (elapsedMs % TIMER_DURATION_MS);
+              renderDiscountTimer(remainingMs);
+            }
+        
+            function startDiscountTimer() {
+              if (document.hidden || timerIntervalId !== null || timerWrap.classList.contains('solved')) return;
+              timerCycleStartedAt = performance.now();
+              renderDiscountTimer(TIMER_DURATION_MS);
+              timerIntervalId = setInterval(tickDiscountTimer, TIMER_TICK_MS);
+            }
+
+            function handleTimerVisibilityChange() {
+              if (document.hidden) {
+                stopDiscountTimer();
+                return;
+              }
+
+              startDiscountTimer();
+            }
+        
+            function resetDiscountTimer() {
+              stopDiscountTimer();
+              renderDiscountTimer(TIMER_DURATION_MS);
+              startDiscountTimer();
+            }
+        
+            startDiscountTimer();
+            window.addEventListener('pagehide', stopDiscountTimer);
+            window.addEventListener('pageshow', startDiscountTimer);
+            document.addEventListener('visibilitychange', handleTimerVisibilityChange);
+        
+            /* ══ 퀴즈 인터랙션 ══ */
+            const overlay = document.getElementById('overlay');
+            const popupLayer = document.getElementById('popup-layer');
+            const popupImg = document.getElementById('popup-img');
+            const popupCircleIcon = document.getElementById('popup-circle-icon');
+            const scrollZone = document.getElementById('scroll-zone');
+            const progressBar = document.getElementById('progress-bar');
+
+            function releasePopupWillChange(event) {
+              if (event.target === event.currentTarget) event.currentTarget.style.willChange = 'auto';
+            }
+
+            popupLayer.addEventListener('animationend', releasePopupWillChange);
+            popupCircleIcon.addEventListener('animationend', releasePopupWillChange);
+        
+            // [요소 ID] → { popup: answer SVG, icon: circle_icon PNG }
+            const quizMap = {
+              'timer-wrapper': { popup: 'asset/answer_timer.svg', icon: 'asset/circle_icon_timer.png' },
+              'discount-deal': { popup: 'asset/answer_discount.svg', icon: 'asset/circle_icon_discount.png' },
+              'sold-out-wrapper': { popup: 'asset/answer_cart.svg', icon: 'asset/circle_icon_cart.png' },
+              'marquee-wrapper': { popup: 'asset/answer_scissors.svg', icon: 'asset/circle_icon_scissors.png' },
+              'large-banner': { popup: 'asset/answer_gift.svg', icon: 'asset/circle_icon_gift.png' },
+            };
+
+            const popupImageCache = new Map();
+            const popupPreparationPromises = new Map();
+
+            function preparePopupImage(src) {
+              if (popupImageCache.has(src)) {
+                return popupImageCache.get(src).preparation;
+              }
+
+              const image = new Image();
+              const preparation = new Promise(resolve => {
+                let finished = false;
+
+                const finish = async success => {
+                  if (finished) return;
+                  finished = true;
+
+                  if (success && typeof image.decode === 'function') {
+                    try {
+                      await image.decode();
+                    } catch (error) {}
+                  }
+
+                  resolve({ src, success });
+                };
+
+                image.addEventListener('load', () => finish(true), { once: true });
+                image.addEventListener('error', () => finish(false), { once: true });
+                image.src = src;
+
+                if (image.complete) {
+                  finish(image.naturalWidth > 0);
+                }
+              });
+
+              popupImageCache.set(src, { image, preparation });
+              return preparation;
+            }
+
+            Object.entries(quizMap).forEach(([id, assets]) => {
+              popupPreparationPromises.set(id, Promise.all([
+                preparePopupImage(assets.popup),
+                preparePopupImage(assets.icon),
+              ]));
+            });
+        
+            const foundItems = new Set();
+            let activeId = null;
+            let isPopupOpening = false;
+        
+            function updateProgressBar(count) {
+              if (count === 0) {
+                progressBar.src = 'asset/progress_bar_0.svg';
+                progressBar.style.left = '86.2px';
+                progressBar.style.top = '386.93px';
+                progressBar.style.width = '908px';
+                progressBar.style.height = '13px';
+              } else if (count >= 1 && count <= 4) {
+                progressBar.src = `asset/progress_bar_${count}.svg`;
+                // SVG 내 글로우 패딩(11.1px) 보정 -> 내부 바 위치를 86.2px, 386.93px로 완전 일치
+                progressBar.style.left = '75.1px';
+                progressBar.style.top = '375.83px';
+                progressBar.style.width = '919px';
+                progressBar.style.height = '36px';
+              } else if (count >= 5) {
+                progressBar.src = 'asset/progress_bar_5.svg';
+                progressBar.style.left = '75.1px';
+                progressBar.style.top = '375.83px';
+                progressBar.style.width = '930px';
+                progressBar.style.height = '36px';
+              }
+            }
+        
+            /* ── 사운드 효과 (Base64 인메모리 디코딩, BGM 간섭 원천 차단) ── */
+            const sfxAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            let correctSfxBuffer = null;
+            let sfxReadyPromise = null;
+            const activeSfxSources = new Map();
+
+            const unlockAudioCtx = () => {
+              ensureQuizSfxReady();
+              if (sfxAudioCtx.state === 'suspended') {
+                sfxAudioCtx.resume();
+              }
+            };
+            window.addEventListener('touchstart', unlockAudioCtx, { passive: true });
+            window.addEventListener('pointerdown', unlockAudioCtx, { passive: true });
+            window.addEventListener('click', unlockAudioCtx, { passive: true });
+
+            function base64ToArrayBuffer(base64) {
+              const binaryString = window.atob(base64.split(',')[1]);
+              const len = binaryString.length;
+              const bytes = new Uint8Array(len);
+              for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              return bytes.buffer;
+            }
+
+            function decodeAudio(arrayBuffer) {
+              return new Promise((resolve, reject) => {
+                try {
+                  const res = sfxAudioCtx.decodeAudioData(
+                    arrayBuffer,
+                    buf => resolve(buf),
+                    err => reject(err)
+                  );
+                  if (res && typeof res.then === 'function') {
+                    res.then(resolve).catch(reject);
+                  }
+                } catch (e) {
+                  reject(e);
+                }
+              });
+            }
+
+            function ensureQuizSfxReady() {
+              if (sfxReadyPromise) return sfxReadyPromise;
+
+              const decodingTasks = [];
+              if (typeof CORRECT_SFX_B64 !== 'undefined') {
+                decodingTasks.push(
+                  decodeAudio(base64ToArrayBuffer(CORRECT_SFX_B64)).then(buffer => {
+                    correctSfxBuffer = buffer;
+                  })
+                );
+              }
+
+              sfxReadyPromise = Promise.all(decodingTasks).catch(error => {
+                console.error('퀴즈 효과음 디코딩 에러:', error);
+              });
+              return sfxReadyPromise;
+            }
+
+            function playBufferSound(buffer) {
+              if (sfxAudioCtx.state === 'suspended') {
+                sfxAudioCtx.resume();
+              }
+              if (buffer) {
+                try {
+                  const source = sfxAudioCtx.createBufferSource();
+                  source.buffer = buffer;
+                  source.connect(sfxAudioCtx.destination);
+                  const handleEnded = () => {
+                    try {
+                      source.disconnect();
+                    } catch (error) {}
+                    activeSfxSources.delete(source);
+                  };
+                  activeSfxSources.set(source, handleEnded);
+                  source.addEventListener('ended', handleEnded, { once: true });
+                  source.start(0);
+                } catch (e) {}
+              }
+            }
+
+            function stopAllSfx() {
+              activeSfxSources.forEach((handleEnded, source) => {
+                source.removeEventListener('ended', handleEnded);
+                try {
+                  source.stop();
+                } catch (error) {}
+                try {
+                  source.disconnect();
+                } catch (error) {}
+              });
+              activeSfxSources.clear();
+            }
+
+            function playCorrect() {
+              if (correctSfxBuffer) {
+                playBufferSound(correctSfxBuffer);
+                return;
+              }
+              ensureQuizSfxReady().then(() => playBufferSound(correctSfxBuffer));
+            }
+
+            const runAudioWhenIdle = window.requestIdleCallback
+              ? callback => window.requestIdleCallback(callback, { timeout: 1000 })
+              : callback => window.setTimeout(callback, 100);
+
+            requestAnimationFrame(() => {
+              runAudioWhenIdle(() => ensureQuizSfxReady());
+            });
+            window.addEventListener('pagehide', stopAllSfx);
+        
+            async function showPopup(id) {
+              if (isPopupOpening || !quizMap[id]) return;
+              isPopupOpening = true;
+
+              try {
+                await popupPreparationPromises.get(id);
+
+                // 이전 활성 요소 해제
+                if (activeId) {
+                  const prevEl = document.getElementById(activeId);
+                  prevEl.classList.remove('quiz-active');
+                  prevEl.classList.add('solved');
+                }
+
+                activeId = id;
+                const el = document.getElementById(id);
+                el.classList.add('quiz-active');
+
+                // ── 정답 진행바 업데이트 (신규 발견 시) ──
+                if (!foundItems.has(id)) {
+                  foundItems.add(id);
+                  updateProgressBar(foundItems.size);
+                  if (id === 'timer-wrapper') stopDiscountTimer();
+                }
+
+                // ── 팝업 및 마키 배너와 겹치지 않도록 스마트 양방향 자동 스크롤 ──
+                const VISIBLE_TOP = 589.47 + 15; // 마키 배너 하단 여유 (604.47px)
+                const POPUP_TOP = CANVAS_H - 615 - 30; // 팝업 상단 여유 (1275px)
+                const sceneRect = scene.getBoundingClientRect();
+                const scale = sceneRect.width / CANVAS_W;
+                const elRect = el.getBoundingClientRect();
+                const elTopInScene = (elRect.top - sceneRect.top) / scale;
+                const elBottomInScene = (elRect.bottom - sceneRect.top) / scale;
+
+                if (elTopInScene < VISIBLE_TOP) {
+                  // 요소 상단이 마키 배너 뒤로 가려짐 → 마키 배너 아래로 온전히 내려줌
+                  scrollZone.scrollTop -= (VISIBLE_TOP - elTopInScene);
+                } else if (elBottomInScene > POPUP_TOP) {
+                  // 요소 하단이 팝업 영역에 걸림 → 팝업 위로 요소를 올려줌
+                  scrollZone.scrollTop += (elBottomInScene - POPUP_TOP);
+                }
+
+                // 준비된 이미지를 먼저 연결한 뒤 오버레이와 두 모션을 한 번에 시작
+                popupImg.src = quizMap[id].popup;
+                popupCircleIcon.src = quizMap[id].icon;
+                popupLayer.style.willChange = 'transform';
+                popupCircleIcon.style.willChange = 'transform, opacity';
+                scene.classList.add('has-overlay');
+                overlay.style.background = 'rgba(0, 0, 0, 0.5)';
+                overlay.style.display = 'block';
+                popupLayer.classList.remove('show');
+                popupCircleIcon.classList.remove('bboing');
+                void popupLayer.offsetWidth; // 두 애니메이션 재시작을 위한 단일 reflow
+                popupLayer.classList.add('show');
+                popupCircleIcon.classList.add('bboing');
+                setTimeout(() => {
+                  popupLayer.style.willChange = 'auto';
+                  popupCircleIcon.style.willChange = 'auto';
+                }, 700);
+
+                // 정답 사운드 효과음 재생
+                playCorrect();
+
+                // 스크롤 잠금
+                scrollZone.style.overflowY = 'hidden';
+              } catch (error) {
+                popupLayer.style.willChange = 'auto';
+                popupCircleIcon.style.willChange = 'auto';
+                console.error('팝업 이미지를 준비하지 못했습니다.', error);
+              } finally {
+                isPopupOpening = false;
+              }
+            }
+        
+            function closePopup() {
+              if (!activeId) return;
+              const el = document.getElementById(activeId);
+              el.classList.remove('quiz-active');
+              // 팝업을 닫고 나온 이후 모션 정지 및 흑백 처리 적용
+              el.classList.add('solved');
+              activeId = null;
+        
+              scene.classList.remove('has-overlay');
+              overlay.style.display = 'none';
+              popupLayer.classList.remove('show');
+              popupCircleIcon.classList.remove('bboing');
+              popupLayer.style.willChange = 'auto';
+              popupCircleIcon.style.willChange = 'auto';
+        
+              // 스크롤 잠금 해제
+              scrollZone.style.overflowY = 'auto';
+        
+              // ── 5번째 요소까지 모두 맞춘 경우 → 쇼핑몰 화면으로 잠시 돌아간 뒤 축하 팝업 등장 ──
+              if (foundItems.size >= 5) {
+                setTimeout(() => {
+                  showCongratulation();
+                }, 400); // 0.4초 딜레이 후 축하 팝업
+              }
+            }
+        
+            /* ══ 축하(Congratulation) 팝업 & 컨패티 파티클 시스템 ══ */
+            const congratsWrap = document.getElementById('congratulation-wrap');
+            const btnNext = document.getElementById('btn-next');
+            const confettiCanvas = document.getElementById('confetti-canvas');
+            const confettiCtx = confettiCanvas.getContext('2d');
+            let confettiParticles = [];
+            let confettiAnimId = null;
+            const CONFETTI_PARTICLE_COUNT = 80;
+            const CONFETTI_MAX_DURATION_MS = 2500;
+        
+            const CONFETTI_COLORS = [
+              '#35D047', '#0E9D2D', '#4CEE5F', // 지구저구 그린
+              '#FF66B6', '#FFD7EC', '#FF1493', // 핑크
+              '#FFC25F', '#FFA500', '#FFD700', // 옐로우/골드
+              '#407AB9', '#60A5FA', '#38BDF8', // 블루
+              '#FFFFFF'                         // 화이트
+            ];
+        
+            class ConfettiParticle {
+              constructor(originX, originY) {
+                this.x = originX + (Math.random() * 260 - 130);
+                this.y = originY + (Math.random() * 100 - 50);
+        
+                // 상단 및 양옆으로 팡 터져나가는 속도
+                const angle = (Math.PI * 1.5) + (Math.random() * 1.6 - 0.8);
+                const speed = 22 + Math.random() * 26;
+                this.vx = Math.cos(angle) * speed + (Math.random() * 16 - 8);
+                this.vy = Math.sin(angle) * speed - (10 + Math.random() * 14);
+        
+                this.gravity = 0.65 + Math.random() * 0.3;
+                this.friction = 0.965;
+        
+                this.color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+                this.type = Math.floor(Math.random() * 3); // 0: 리본, 1: 원형 도트, 2: 별/다이아
+        
+                this.size = 18 + Math.random() * 18;
+                this.aspect = 0.35 + Math.random() * 0.5;
+        
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotSpeed = (Math.random() * 0.16 - 0.08);
+        
+                this.flip = Math.random() * Math.PI;
+                this.flipSpeed = 0.09 + Math.random() * 0.14;
+        
+                this.opacity = 1;
+                this.fadeSpeed = 0.004 + Math.random() * 0.006;
+                this.life = 1;
+              }
+        
+              update() {
+                this.vx *= this.friction;
+                this.vy *= this.friction;
+                this.vy += this.gravity;
+        
+                this.x += this.vx;
+                this.y += this.vy;
+        
+                this.rotation += this.rotSpeed;
+                this.flip += this.flipSpeed;
+        
+                // 하강 시작 후 페이드아웃
+                if (this.vy > 3) {
+                  this.life -= this.fadeSpeed * 2;
+                  this.opacity = Math.max(0, this.life);
+                }
+              }
+        
+              draw(ctx) {
+                if (this.opacity <= 0) return;
+        
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.scale(1, Math.cos(this.flip)); // 3D 회전 텀블링
+                ctx.globalAlpha = this.opacity;
+                ctx.fillStyle = this.color;
+        
+                if (this.type === 0) {
+                  // 직사각형 리본 조각
+                  ctx.fillRect(-this.size / 2, (-this.size * this.aspect) / 2, this.size, this.size * this.aspect);
+                } else if (this.type === 1) {
+                  // 원형 도트
+                  ctx.beginPath();
+                  ctx.arc(0, 0, this.size * 0.38, 0, Math.PI * 2);
+                  ctx.fill();
+                } else {
+                  // 다이아몬드 / 별 조각
+                  ctx.beginPath();
+                  ctx.moveTo(0, -this.size * 0.55);
+                  ctx.lineTo(this.size * 0.45, 0);
+                  ctx.lineTo(0, this.size * 0.55);
+                  ctx.lineTo(-this.size * 0.45, 0);
+                  ctx.closePath();
+                  ctx.fill();
+                }
+        
+                ctx.restore();
+              }
+            }
+        
+            function stopConfetti() {
+              if (confettiAnimId !== null) {
+                cancelAnimationFrame(confettiAnimId);
+                confettiAnimId = null;
+              }
+        
+              confettiParticles.length = 0;
+              confettiCtx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+              confettiCanvas.style.display = 'none';
+            }
+        
+            function launchConfetti() {
+              // 재실행 전에 이전 프레임·파티클·Canvas를 먼저 완전히 정리
+              stopConfetti();
+              confettiCanvas.style.display = 'block';
+        
+              // 팝업 뒤쪽 상단에서 120개 파티클 동시 폭발
+              for (let i = 0; i < CONFETTI_PARTICLE_COUNT; i++) {
+                confettiParticles.push(new ConfettiParticle(540, 750));
+              }
+        
+              const startedAt = performance.now();
+        
+              function render(frameTime) {
+                // 현재 예약 프레임은 소비되었으므로 실행 중 ID를 먼저 비움
+                confettiAnimId = null;
+        
+                if (frameTime - startedAt >= CONFETTI_MAX_DURATION_MS) {
+                  stopConfetti();
+                  return;
+                }
+        
+                confettiCtx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+                let aliveCount = 0;
+        
+                for (const p of confettiParticles) {
+                  p.update();
+                  p.draw(confettiCtx);
+                  if (p.opacity > 0 && p.y < 1950) aliveCount++;
+                }
+        
+                if (aliveCount > 0) {
+                  confettiAnimId = requestAnimationFrame(render);
+                } else {
+                  stopConfetti();
+                }
+              }
+        
+              confettiAnimId = requestAnimationFrame(render);
+            }
+        
+            window.addEventListener('pagehide', stopConfetti);
+        
+            function showCongratulation() {
+              scene.classList.add('has-overlay');
+              overlay.style.background = 'rgba(0, 0, 0, 0.5)';
+              overlay.style.display = 'block';
+              congratsWrap.classList.remove('show');
+              void congratsWrap.offsetWidth; // reflow 강제
+              congratsWrap.classList.add('show');
+        
+              // 팝업 뒤쪽에서 컨패티 팡 폭발!
+              launchConfetti();
+        
+              // 스크롤 잠금
+              scrollZone.style.overflowY = 'hidden';
+        
+              // 축하 효과음 재생
+              playCorrect();
+            }
+        
+            // Next 버튼 클릭 핸들러
+            btnNext.addEventListener('click', (e) => {
+              e.stopPropagation();
+              stopConfetti();
+              window.parent.postMessage({ type: 'navigate', url: encodeURI('./도로화면/scene3.html') }, '*');
+            });
+        
+            // ── discount_deal 스티키 플로팅 로직 (화면 Y: 1001px 도달 시 고정) ──
+            const discountDealWrapper = document.getElementById('discount-deal-wrapper');
+            const STICKY_THRESHOLD = 867.87; // 1868.87 - 1001.0
+            let isScrollTicking = false;
+            let releaseDiscountDealLayerId = null;
+        
+            function updateDiscountDealPosition() {
+              discountDealWrapper.style.willChange = 'transform';
+              clearTimeout(releaseDiscountDealLayerId);
+              releaseDiscountDealLayerId = setTimeout(() => {
+                discountDealWrapper.style.willChange = 'auto';
+              }, 160);
+
+              if (!isScrollTicking) {
+                isScrollTicking = true;
+                requestAnimationFrame(() => {
+                  isScrollTicking = false;
+                  const scrollTop = scrollZone.scrollTop;
+                  if (scrollTop >= STICKY_THRESHOLD) {
+                    const translateY = scrollTop - STICKY_THRESHOLD;
+                    discountDealWrapper.style.transform = `translate3d(0, ${translateY}px, 0)`;
+                  } else {
+                    discountDealWrapper.style.transform = 'translate3d(0, 0, 0)';
+                  }
+                });
+              }
+            }
+        
+            scrollZone.addEventListener('scroll', updateDiscountDealPosition, { passive: true });
+        
+            // 각 요소 클릭 핸들러
+            Object.keys(quizMap).forEach(id => {
+              const targetEl = document.getElementById(id);
+              targetEl.addEventListener('click', e => {
+                e.stopPropagation();
+                // 이미 맞추고 흑백이 된 요소는 클릭 불가
+                if (targetEl.classList.contains('solved')) return;
+        
+                if (activeId === id) {
+                  closePopup();        // 같은 요소 재클릭 → 닫기
+                } else {
+                  showPopup(id);       // 다른 요소 클릭 → 해당 팝업
+                }
+              });
+            });
+        
+            // 오버레이 클릭 → 일반 퀴즈 팝업 닫기 (축하 팝업이 아닐 때)
+            overlay.addEventListener('click', () => {
+              if (activeId) {
+                closePopup();
+              }
+            });
+      };
+    })();
+  </script>
+
+  <script>
+    /* 기존 screen1 연출이 끝난 다음 클릭에서 실제 퀴즈 장면으로 전환 */
+    (() => {
+      const introScene = document.getElementById('intro-scene');
+      const quizScene = document.getElementById('quiz-scene');
+      const quizCard = document.getElementById('quiz-card');
+      let quizReady = false;
+      let transitioned = false;
+    
+      quizCard.addEventListener('animationend', (event) => {
+        if (event.animationName === 'cardDrop') quizReady = true;
+      });
+    
+      introScene.addEventListener('click', () => {
+        if (!quizReady || transitioned) return;
+        transitioned = true;
+
+        // 공통 뒤로가기 UI를 숨겨질 인트로 장면에서 본 퀴즈 장면으로 이동한다.
+        const backBtn = document.getElementById('back-btn');
+        const mainPopupOverlay = document.getElementById('main-popup-overlay');
+        if (backBtn) quizScene.appendChild(backBtn);
+        if (mainPopupOverlay) quizScene.appendChild(mainPopupOverlay);
+
+        introScene.style.display = 'none';
+        introScene.setAttribute('aria-hidden', 'true');
+        quizScene.style.display = 'block';
+        quizScene.setAttribute('aria-hidden', 'false');
+        window.initQuizScreen();
+      });
+    })();
+  </script>
+</body>
+</html>
