@@ -39,6 +39,7 @@
             position: relative;
             width: 1080px;
             height: 1920px;
+            flex-shrink: 0;
             /* 기존 배경의 하늘색 그라데이션 복원 */
             background: linear-gradient(to bottom, #63C8FF 0%, #C5EBFF 34%); 
             overflow: hidden;
@@ -737,7 +738,11 @@
         // 화면 크기에 맞게 1080x1920 캔버스 스케일링
         function resizeCanvas() {
             const container = document.querySelector('.screen-container');
-            const scale = Math.min(window.innerWidth / 1080, window.innerHeight / 1920);
+            if (!container) return;
+            const vw = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+            const vh = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+            if (!vw || !vh) return;
+            const scale = Math.min(vw / 1080, vh / 1920);
             container.style.transform = `scale(${scale}) translateZ(0)`;
         }
 
@@ -767,6 +772,8 @@
         }
 
         window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('orientationchange', resizeCanvas);
+        window.addEventListener('pageshow', resizeCanvas);
         resizeCanvas();
 
         const btnStart = document.getElementById('btnStart');
